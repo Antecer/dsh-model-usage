@@ -9,19 +9,23 @@
 flowchart TB
   subgraph Browser["浏览器（Client）"]
     Footer["侧栏底部入口<br/>sidebar.footer.action"]
-    Modal["双列详情弹窗<br/>左: 供应商列表 / 右: 额度+用量"]
+    Modal["双列详情弹窗<br/>左: 供应商卡片 / 右: 固定摘要 + 四分区统计"]
     Footer -->|点击| Modal
   end
 
   subgraph Host["Host（dsh-model-usage 插件）"]
     Route["/model-usage 前缀路由<br/>webServer.register + connection.admit"]
-    Snap["快照编排<br/>TTL 缓存 · 单飞 · 退避 · 代际失效"]
+    Snap["快照编排<br/>并行取数 · TTL 缓存 · 单飞 · 退避 · 代际失效"]
     Adapters["供应商适配器<br/>lib/adapters.mjs"]
     Probe["sub2api 探测<br/>lib/profile.mjs → profile 配置"]
-    Ledger["本机用量账本<br/>lib/ledger.mjs"]
+    Ledger["本机用量账本<br/>lib/ledger.mjs（按日/按会话聚合）"]
+    ZAuth["ZCode 会话<br/>lib/zcode/auth.mjs（共享凭据 enc:v1）"]
+    ZReset["GLM 额度重置<br/>lib/zcode/reset.mjs + login.mjs"]
     Route --> Snap
     Snap --> Adapters
     Adapters --> Probe
+    Route --> ZReset
+    ZReset --> ZAuth
   end
 
   subgraph DSH["DSH 宿主"]
@@ -39,8 +43,8 @@ flowchart TB
     Sub2["sub2api 中继 · {baseURL}/v1/usage"]
   end
 
-  Footer -.->|POST /model-usage/snapshot| Route
-  Modal -.->|POST /model-usage/stats| Route
+  Footer -.->|POST snapshot / current| Route
+  Modal -.->|POST stats / resetUse / zcode*| Route
   Browser -.->|GET style.css / icons| Route
   Snap --> LLM
   Adapters --> Cred
@@ -49,6 +53,7 @@ flowchart TB
   Events -->|调用后触发刷新| Snap
   Adapters --> DeepSeek & GLM & Kimi & Others
   Probe --> Sub2
+  ZReset -->|zcode.z.ai reset status/use| GLM
   Route --> Modal
 ```
 
@@ -83,7 +88,7 @@ flowchart TD
 flowchart LR
   Req["GET {base}/v1/usage<br/>Authorization: Bearer key"] --> Mode{mode}
   Mode -->|quota_limited| Q["quota: limit/used/remaining<br/>rate_limits: 5h/1d/7d 窗口<br/>expires_at"]
-  Mode -->|"unrestricted + 订阅组"| S["subscription:<br/>daily/weekly/monthly usage+limit<br/>planName · remaining"]
+  Mode -->|"unrestricted + 订阅组"| S["subscription:<br/>daily/weekly/monthly usage+limit<br/>remaining（不采用 planName 营销文案）"]
   Mode -->|"unrestricted + 余额组"| B["balance / remaining<br/>unit: USD"]
 ```
 
@@ -95,7 +100,7 @@ flowchart LR
 |---|---|---|---|
 | deepseek-balance | `GET api.deepseek.com/user/balance` | Bearer | `balance_infos[]`（total/granted/topped_up） |
 | deepseek-account | `ctx.deepseekAccount.getBalance()` | DSH 登录态 | `value[] / bonusWallets[]` |
-| glm-coding | `GET {host}/api/monitor/usage/quota/limit` | raw key（401 回退 Bearer） | `data.limits[]` 按 type+unit 选窗口 |
+| glm-coding | `GET {host}/api/monitor/usage/quota/limit` | raw key（401 回退 Bearer） | `data.limits[]` 按 type+unit 选窗口；nextResetTime 兼容秒级/ISO 字符串，MCP/月缺省时按次月 1 日 00:00 UTC 补算；0% 滚动窗无重置时间属正常（调用后开始计时） |
 | kimi-coding | `GET api.kimi.com/coding/v1/usages` | Bearer | `usage`（周）+ `limits[].detail`（滚动） |
 | moonshot-balance | `GET api.moonshot.{ai,cn}/v1/users/me/balance` | Bearer | `data.available_balance` |
 | openrouter | `GET openrouter.ai/api/v1/credits`（兜底 `/key`） | Bearer | `total_credits - total_usage` |
@@ -111,15 +116,47 @@ sequenceDiagram
   participant C as Client
   participant H as Host 快照编排
   participant A as 适配器
-  C->>H: POST snapshot { refresh? }
-  H->>H: TTL 命中 → 直接返回缓存
-  H->>A: 未命中：单飞请求（全程超时）
-  A-->>H: 归一化 { status, kind, balance/quota/windows }
-  H->>H: 代际校验：配置已变则丢弃结果
+  C->>H: POST snapshot { refresh?, route? }
+  H->>H: TTL 命中 → 直接返回缓存（保留原 fetchedAt）
+  par 并行取数（按路由）
+    H->>A: 未命中：单飞请求（全程超时）
+    A-->>H: 归一化 { status, kind, balance/quota/windows }
+  end
+  H->>H: 代际校验：配置已变则丢弃结果；<br/>本轮新数据 fetchedAt 统一为响应完成时刻
+  H->>H: 窗口排序：5h → 日 → 周 → 月；<br/>GLM 供应商挂载重置机会（resets）
   H-->>C: { providers[] }（错误脱敏）
   Note over H: 失败 → 退避 60s→120s→300s<br/>保留上次成功值并标 stale
-  Note over H: session/event(assistant/message)<br/>→ 记账 + 触发对应供应商刷新
+  Note over H: session/event(assistant/message)<br/>→ 记账（含会话 id）+ 触发对应供应商刷新
 ```
+
+## RPC 端点（POST /model-usage，body { endpoint, payload }）
+
+| endpoint | 说明 |
+|---|---|
+| `snapshot` | 额度快照；`{refresh: true, route?}` 强制刷新（可限定路由） |
+| `stats` | 本机用量统计；`{days}` 或 `{scope: 'week'\|'month'}`（日历口径） |
+| `current` | 最近一次真实模型调用的供应商（前端跟随兜底） |
+| `config` | refreshSeconds / footer / card.template |
+| `resetUse` | GLM 额度核销；`{type: 'FIVE_HOUR'\|'WEEK'}`（幂等，失败复用同一 key） |
+| `zcodeAuthState` | ZCode 会话连接状态（重置功能用） |
+| `zcodeLoginStart / zcodeLoginComplete / zcodeDisconnect` | 内嵌 OAuth 登录 / 断开（共享凭据） |
+
+## GLM 额度重置链路（ZCode 同款）
+
+```mermaid
+flowchart LR
+  Card["GLM 卡片窗口行<br/>「重置 N」按钮"] --> Dialog["「可重置额度」弹窗<br/>额度卡片 + 重置行（二次确认）"]
+  Dialog -->|点行内重置| Rpc["POST resetUse { type }"]
+  Rpc --> Session["lib/zcode/auth.mjs<br/>~/.zcode/v2/credentials.json<br/>enc:v1 AES-256-GCM 共享凭据"]
+  Session --> Reset["lib/zcode/reset.mjs"]
+  Reset -->|GET status<br/>POST opportunity/use| ZServer["zcode.z.ai<br/>/api/v1/coding-plan/reset/*"]
+  Rpc -->|核销成功| Refresh["作废 GLM 额度缓存<br/>强制对账 status"]
+```
+
+- **凭据共享**：存储路径与格式与 ZCode 客户端完全一致（enc:v1，密钥由本机信息推导）；ZCode 已登录即开即用，插件内嵌 OAuth 登录（lib/zcode/login.mjs，授权码手动粘贴回调）写回同一文件，双向共用登录态
+- **机会状态**：GET /status（5 分钟 TTL 缓存）；无有效机会时 POST /opportunity 触发服务端资格判断（3301 限流按 next_try_at 冷却）
+- **鉴权**：`Authorization: Bearer <zcodeJwt>` + `X-Bigmodel-Authorization: <业务JWT>`（直传不套 Bearer），PERSONAL scope
+- **401**：视为会话失效，前端提示经 GLM 卡片 Logo（账户入口）重新连接
 
 ## 配置结构
 

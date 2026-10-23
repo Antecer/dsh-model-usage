@@ -105,16 +105,18 @@ async function renderPlugin(t, opts = {}) {
   const ctx = {
     effect(fn) { fn() },
     locale: { register() {} },
-    // 会话服务：列表快照带对话标题（sessionName 解析依赖）；binding 返回空对象即可
+    // 可选服务（如浏览器侧模型目录 modelDirectories）：默认没有，按用例注入
+    get: (name) => (opts.services || {})[name],
+    // 会话服务：列表快照带对话标题（sessionName 解析依赖）；binding 默认返回空对象即可
     sessions: {
       list: {
         getSnapshot: () => ({ byId: {
-          'sess-aaaa-0001': { title: '写周报的对话' },
+          'sess-aaaa-0001': { title: '写周报的对话', ...(opts.mainView === false ? {} : { retainedBy: { mainView: 1 } }) },
           'sess-bbbb-0002': { title: '调试插件的对话' },
         } }),
         subscribe: () => () => {},
       },
-      binding: () => ({}),
+      binding: opts.binding || (() => ({})),
     },
     slots: {
       inject(name, fn) { fn() },
@@ -161,6 +163,27 @@ test('侧栏渲染状态最紧急的供应商卡片（真实 DOM）', async (t) 
   assert.ok(text(card).includes('5s'), '刷新时间应显示 5s')
   assert.ok(text(card).includes('调用后开始计时'), '0% 滚动窗无 resetAt 时应提示未开始而非留空')
   await unmount()
+})
+
+test('新建对话（无选择）：侧栏卡片立即跟随模型目录默认供应商', async (t) => {
+  // 浏览器侧模型目录（与原生输入框同源）：新会话无 modelSelection 记录时 default 即当前模型
+  const catalog = {
+    catalog: {
+      store: {
+        getSnapshot: () => ({ value: { default: { provider: 'kimi1' } }, status: 'ready' }),
+        subscribe: () => () => {},
+      },
+    },
+  }
+  const face = { getSnapshot: () => ({ next: null, lastUsed: null }), subscribe: () => () => {} }
+  const { container } = await renderPlugin(t, {
+    services: { modelDirectories: catalog },
+    binding: () => ({ session: { projections: { faceOf: () => face } } }),
+  })
+  const card = container.querySelector('.dmu-pcard')
+  assert.ok(card, '侧栏应渲染供应商卡片')
+  assert.ok(text(card).includes('Kimi 一号'), '新会话无选择时应立即显示默认供应商 kimi1')
+  assert.ok(!text(card).includes('GLM Coding'), '不应显示上一会话遗留或状态最紧急的供应商')
 })
 
 test('右栏顶部固定摘要：今日/本周/本月/全部 + 近 12 个月热力图', async (t) => {

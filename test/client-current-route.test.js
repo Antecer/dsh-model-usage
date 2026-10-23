@@ -87,6 +87,34 @@ function makeApi(route, delay = 0) {
   }
 }
 
+// 浏览器侧模型目录（dsh-client-ui-model-selection 的 modelDirectories 服务）：
+// store 快照形如 { value: { default: { provider } }, status }，随加载/默认值变更通知订阅者。
+function makeCatalogStore(provider) {
+  let value = provider == null ? null : { default: { provider } }
+  let status = provider == null ? 'loading' : 'ready'
+  const subs = new Set()
+  return {
+    getSnapshot: () => ({ value, status }),
+    subscribe: (cb) => { subs.add(cb); return () => subs.delete(cb) },
+    _ready(nextProvider) {
+      value = nextProvider == null ? null : { default: { provider: nextProvider } }
+      status = nextProvider == null ? 'loading' : 'ready'
+      for (const cb of [...subs]) cb()
+    },
+    get subscriberCount() { return subs.size },
+  }
+}
+
+function makeModelDirectories(store) {
+  return { catalog: { store } }
+}
+
+/** 只暴露给定服务的 ctx.get（cordis 可选取值，不要求 inject 声明）。 */
+function makeServiceCtx(sessions, services) {
+  const ctx = { sessions, get: (name) => (services || {})[name] }
+  return ctx
+}
+
 const immediate = () => new Promise((r) => setTimeout(r, 0))
 
 // ---------------------------------------------------------------- 用例
@@ -200,6 +228,92 @@ test('新建对话无选择时立即回退到 agentDefaultModel 默认供应商'
   face._set({ next: { provider: 'X' }, lastUsed: null })
   await immediate()
   assert.deepEqual(routes, ['D', 'X'], '用户选择后覆盖默认值')
+  dispose()
+})
+
+test('新建对话无选择时立即跟随浏览器侧模型目录的默认供应商', async () => {
+  const sessions = makeSessions(['a'], { a: makeBinding(null) }, 'a')
+  const catalog = makeCatalogStore('D')
+  const routes = []
+  const ctx = makeServiceCtx(sessions, { modelDirectories: makeModelDirectories(catalog) })
+  const dispose = trackCurrentRoute(ctx, makeApi(null), (r) => routes.push(r))
+  await immediate()
+  assert.deepEqual(routes, ['D'], '新会话应立即跟随目录 default，而不是等点模型/发消息')
+
+  const face = sessions.binding('a').session.projections.faceOf('modelSelection')
+  face._set({ next: { provider: 'X' }, lastUsed: null })
+  await immediate()
+  assert.deepEqual(routes, ['D', 'X'], '用户选择后覆盖默认值')
+  dispose()
+})
+
+test('模型目录尚未加载完成：加载完成（default 就绪）后立即跟随', async () => {
+  const sessions = makeSessions(['a'], { a: makeBinding(null) }, 'a')
+  const catalog = makeCatalogStore(null)
+  const routes = []
+  const ctx = makeServiceCtx(sessions, { modelDirectories: makeModelDirectories(catalog) })
+  const dispose = trackCurrentRoute(ctx, makeApi(null), (r) => routes.push(r))
+  await immediate()
+  assert.deepEqual(routes, [], '目录未就绪时不应误报')
+  catalog._ready('D')
+  await immediate()
+  assert.deepEqual(routes, ['D'], '目录就绪后应立即跟随默认供应商')
+  dispose()
+})
+
+test('默认模型变化时空白新会话自动跟随新默认值', async () => {
+  const sessions = makeSessions(['a'], { a: makeBinding(null) }, 'a')
+  const catalog = makeCatalogStore('D')
+  const routes = []
+  const ctx = makeServiceCtx(sessions, { modelDirectories: makeModelDirectories(catalog) })
+  const dispose = trackCurrentRoute(ctx, makeApi(null), (r) => routes.push(r))
+  await immediate()
+  assert.deepEqual(routes, ['D'])
+  catalog._ready('K')
+  await immediate()
+  assert.deepEqual(routes, ['D', 'K'], '宿主默认模型变更后，未选择的会话应跟随新默认')
+  dispose()
+})
+
+test('新建对话首页尚无会话 id（无绑定）时也跟随默认供应商', async () => {
+  const sessions = makeSessions([], {}, null)
+  const catalog = makeCatalogStore('D')
+  const routes = []
+  const ctx = makeServiceCtx(sessions, { modelDirectories: makeModelDirectories(catalog) })
+  const dispose = trackCurrentRoute(ctx, makeApi(null), (r) => routes.push(r))
+  await immediate()
+  assert.deepEqual(routes, ['D'], '没有当前会话时仍显示 DSH 默认模型')
+  dispose()
+})
+
+test('会话已有显式选择时不被模型目录 default 覆盖', async () => {
+  const sessions = makeSessions(['a'], { a: makeBinding('Y') }, 'a')
+  const catalog = makeCatalogStore('D')
+  const routes = []
+  const ctx = makeServiceCtx(sessions, { modelDirectories: makeModelDirectories(catalog) })
+  const dispose = trackCurrentRoute(ctx, makeApi(null), (r) => routes.push(r))
+  await immediate()
+  assert.deepEqual(routes, ['Y'], '已有选择优先于目录默认值')
+  dispose()
+})
+
+test('模型目录服务晚于插件就绪：服务出现后自动跟随默认供应商', async () => {
+  const sessions = makeSessions(['a'], { a: makeBinding(null) }, 'a')
+  const routes = []
+  const listeners = new Set()
+  let catalog = null
+  const ctx = {
+    sessions,
+    get: (name) => (name === 'modelDirectories' ? catalog : undefined),
+    on: (event, cb) => { if (event === 'internal/service') listeners.add(cb); return () => listeners.delete(cb) },
+  }
+  const dispose = trackCurrentRoute(ctx, makeApi(null), (r) => routes.push(r))
+  await immediate()
+  assert.deepEqual(routes, [], '服务未就绪时不切换')
+  catalog = makeModelDirectories(makeCatalogStore('D'))
+  for (const cb of [...listeners]) cb('modelDirectories', catalog)
+  await immediate()
+  assert.deepEqual(routes, ['D'], 'modelDirectories 就绪后应立即跟随其默认供应商')
   dispose()
 })
 

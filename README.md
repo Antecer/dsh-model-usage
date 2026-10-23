@@ -6,10 +6,12 @@ DSH（DeepSeek Harness）Web 插件：在侧栏底部常驻显示模型供应商
 
 ## 功能
 
-- **侧栏底部入口**：当前（或最紧急）供应商的图标、名称与一行额度摘要
-- **双列详情弹窗**：左列供应商列表，右列选中供应商的额度详情与本机用量（限高 74vh，内容滚动）
-- **额度数据**：服务商接口返回的真实余额 / 剩余额度 / 订阅窗口（5h、日、周、月）与重置倒计时
-- **本机用量**：今日与近 7 天的模型调用数、消耗 Tokens、缓存命中率、使用趋势与最近请求
+- **侧栏底部入口**：跟随当前前台对话供应商（新建对话立即跟随 DSH 默认模型），展示图标、名称与额度摘要；无识别结果时展示状态最紧急的供应商
+- **双列详情弹窗**：左列供应商卡片（独立刷新），右列固定摘要 + 统计（限高 74vh，下半滚动）
+- **右栏固定摘要**：今日 / 本周 / 本月 / 全部四张统计卡 + 近 12 个月用量热力图（悬停实测钳位提示）
+- **四个统计分区**：会话统计 → 模型统计（行可展开每次调用）→ 渠道统计 → 历史统计（按日新到旧）；统一信息列「调用次数 / 输入 tokens / 缓存 tokens / 输出 tokens」，范围可选今日 / 本周 / 本月 / 全部（日历口径），UI 偏好（范围与各分区展开态）经 localStorage 持久化
+- **额度数据**：服务商接口返回的真实余额 / 剩余额度 / 订阅窗口（按 5h → 日 → 周 → 月排列）与重置倒计时、余量配色（≥60% 蓝 / ≥30% 绿 / ≥5% 橘 / <5% 亮红）
+- **GLM Coding Plan 额度重置**（ZCode 同款）：与 ZCode 客户端共享登录凭据，5h/周窗口显示「重置 N」按钮，点击弹出「可重置额度」弹窗（当前额度卡片 + 重置行，二次确认即核销）；未登录 ZCode 时可内嵌 OAuth 登录并回写共享凭据
 - **sub2api 中继自动识别**：从 DSH profile 读取供应商 baseURL 与凭据引用，自动探测 `GET /v1/usage`，无需手动配置
 - **零配置凭据复用**：查询模板按 profile 中的 baseURL 自动匹配（host 精确匹配），凭据直接复用 provider 的 `apiKeyEnv`，多账号互不串号；`credentials` / `adapters` 只在需要覆盖默认行为时才配置。插件 Host 进程没有 profile 环境变量时，按当前 llm 路由命中数自动识别正在运行的 profile
 - **模板字符串**：卡片摘要可用 `card.template` 自定义排列
@@ -27,7 +29,7 @@ dsh plugin --profile <profile> add link:/path/to/dsh-model-usage
 ## 改动生效方式
 
 - **`lib/client.js`（界面）**：刷新页面即可
-- **`lib/index.mjs` / `lib/adapters.mjs` / `lib/profile.mjs`（Host 取数）**：在插件列表里重启本插件即可，无需重启整个应用
+- **`lib/index.mjs` / `lib/adapters.mjs` / `lib/profile.mjs` / `lib/ledger.mjs` / `lib/zcode/*.mjs`（Host 取数、账本与 GLM 重置）**：在插件列表里重启本插件即可，无需重启整个应用
 - **profile 配置（`cordis.patch.yml`）**：插件侧 60 秒内自动感知；聊天侧的 provider 变更需重载宿主
 
 ## 供应商支持
@@ -85,10 +87,10 @@ config:
 ## 数据口径
 
 - **额度**：服务商接口返回的真实值（剩余额度 / 余额 / 窗口已用百分比）
-- **本机用量**：`assistant/message` 事件中服务商回传的 usage（input + cacheRead + cacheWrite + output）
-- **缓存命中率**：cacheRead / (cacheRead + input)
-- **统计范围**：本机、插件启用后写入会话日志的调用；其他设备与旁路调用不计
-- 账本文件：`$DSH_HOME/model-usage/ledger.json`（按日聚合，保留 120 天）
+- **本机用量**：`assistant/message` 事件中服务商回传的 usage（input + cacheRead + cacheWrite + output；tokens = 四项合计，缓存 tokens = cacheRead + cacheWrite）
+- **统计维度**：按供应商/模型（渠道、模型统计）、按会话（记录会话 id，标题经 sessions 服务实时解析）、按日（历史统计，新到旧）
+- **统计范围**：今日 / 本周（周一起）/ 本月（1 号起）/ 全部；本机、插件启用后写入会话日志的调用；其他设备与旁路调用不计
+- 账本文件：`$DSH_HOME/model-usage/ledger.json`（按日聚合保留 **180 天**，加载时自动迁移旧版格式；热力图读取最近 364 天）
 - **不做金额估算**：订阅套餐按套餐额度计费，金额以服务商账单为准
 
 ## 安全
@@ -101,7 +103,7 @@ config:
 ## 开发
 
 ```bash
-node --check lib/index.mjs lib/adapters.mjs lib/profile.mjs lib/ledger.mjs lib/client.js
+node --check lib/index.mjs lib/adapters.mjs lib/profile.mjs lib/ledger.mjs lib/zcode/*.mjs lib/client.js
 node --test test/
 ```
 

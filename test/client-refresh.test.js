@@ -40,10 +40,10 @@ test('弹窗左栏工具栏：全部刷新按路由逐个触发（无切换/总�
 
 test('右栏：固定摘要 + 折叠分区结构', () => {
   assert.ok(src.includes('function SummaryTop'), '应有固定顶部摘要组件')
-  assert.ok(src.includes('function Heatmap'), '应有 26 周热力图组件')
+  assert.ok(src.includes('function Heatmap'), '应有近 12 个月热力图组件')
   assert.ok(src.includes('dmu-pane-scroll'), '下半部分应为独立滚动区')
-  assert.ok(src.includes("tr('secModels')") && src.includes("tr('secChannels')") && src.includes("tr('secGlobal')"), '应有模型/渠道/全局三个折叠分区')
-  assert.ok(src.includes('stats.conversations'), '全局统计应包含按对话聚合')
+  assert.ok(src.includes("tr('secConversations')") && src.includes("tr('secModels')") && src.includes("tr('secChannels')") && src.includes("tr('secGlobal')"), '应有会话/模型/渠道/历史四个折叠分区')
+  assert.ok(src.includes('stats.conversations'), '会话统计应消费按对话聚合数据')
 })
 
 test('统计加载失败必须可见（不再永远停在加载中）', () => {
