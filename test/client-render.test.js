@@ -347,10 +347,10 @@ test('统计范围 tabs：今日/本周/本月/全部，按日历口径查询', 
   const overlay = document.querySelector('.dmu-overlay')
   const tabs = [...overlay.querySelectorAll('.dmu-tab')].map((b) => text(b))
   assert.deepEqual(tabs, ['今日', '本周', '本月', '全部'], 'tabs 应为今日/本周/本月/全部')
-  // 默认今日：days=1 查询
-  assert.ok(calls.some((c) => c.endpoint === 'stats' && c.payload && c.payload.days === 1), '默认应发 days=1（今日）查询')
+  // 默认全部：days=180 查询
+  assert.ok(calls.some((c) => c.endpoint === 'stats' && c.payload && c.payload.days === 180), '默认应发 days=180（全部）查询')
   const active = overlay.querySelector('.dmu-tab.active')
-  assert.ok(active && text(active) === '今日', '无偏好时默认选中今日')
+  assert.ok(active && text(active) === '全部', '无偏好时默认选中全部')
   const tabOf = (label) => [...overlay.querySelectorAll('.dmu-tab')].find((b) => text(b) === label)
   await click(tabOf('本周'))
   assert.ok(calls.some((c) => c.endpoint === 'stats' && c.payload && c.payload.scope === 'week'), '本周应发 scope=week 查询')
@@ -360,22 +360,23 @@ test('统计范围 tabs：今日/本周/本月/全部，按日历口径查询', 
 })
 
 test('偏好持久化：记住上次的 tab 与分区展开态', async (t) => {
-  // 第一次渲染：切到「全部」并展开渠道分区
+  // 第一次渲染：默认应为「全部」；切到「今日」并展开渠道分区
   const env1 = await renderPlugin(t, { keepDom: true })
   await env1.click(env1.container.querySelector('.dmu-pcard'))
   let overlay = document.querySelector('.dmu-overlay')
-  const tabAll = [...overlay.querySelectorAll('.dmu-tab')].find((b) => text(b) === '全部')
-  await env1.click(tabAll)
+  assert.ok(text(overlay.querySelector('.dmu-tab.active')) === '全部', '无偏好时默认应为「全部」')
+  const tabToday = [...overlay.querySelectorAll('.dmu-tab')].find((b) => text(b) === '今日')
+  await env1.click(tabToday)
   const secs1 = [...overlay.querySelectorAll('.dmu-sec')]
   await env1.click(secs1[2].querySelector('.dmu-sec-head'))
   await env1.unmount()
 
-  // 第二次渲染（同一 jsdom/localStorage）：应恢复「全部」+ 渠道展开
+  // 第二次渲染（同一 jsdom/localStorage）：应恢复「今日」（而非默认的全部）+ 渠道展开
   const env2 = await renderPlugin(t, { dom: env1.dom })
   await env2.click(env2.container.querySelector('.dmu-pcard'))
   overlay = document.querySelector('.dmu-overlay')
   const active = overlay.querySelector('.dmu-tab.active')
-  assert.ok(active && text(active) === '全部', '重开应恢复上次选择的「全部」')
+  assert.ok(active && text(active) === '今日', '重开应恢复上次选择的「今日」而非默认「全部」')
   const secs2 = [...overlay.querySelectorAll('.dmu-sec')]
   assert.ok(secs2[2].classList.contains('open'), '渠道分区应恢复展开')
   assert.ok(!secs2[0].classList.contains('open') && !secs2[1].classList.contains('open'), '未点过的分区仍保持收起')
