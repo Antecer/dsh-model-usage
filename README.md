@@ -50,7 +50,7 @@ dsh plugin --profile <profile> add @antecer/dsh-model-usage
 ### 从 Git 安装（固定提交）
 
 ```bash
-dsh plugin --profile <profile> add "git+https://github.com/Antecer/dsh-model-usage.git#7b7bb641efb184212a593610070ab77c1f70e470"
+dsh plugin --profile <profile> add "git+https://github.com/Antecer/dsh-model-usage.git#d90145bd58c63a47cb7d6b62c1a9ef1f4e6f957c"
 ```
 
 ### 从本地源码安装（开发）

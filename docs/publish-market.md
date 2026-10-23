@@ -62,7 +62,7 @@ gh repo edit Antecer/dsh-model-usage --add-topic dsh-plugin
 "source": { "type": "npm" }
 ```
 
-- 索引当前用 git 源固定提交 `7b7bb64…`；**push 本次改动后**，用 `git rev-parse HEAD` 取新提交并更新 `source.commit`，否则市场安装到的是旧提交（功能相同，但缺新图标与元数据）。npm 发布后改用 npm 源即可不再维护 commit。
+- 索引当前用 git 源固定提交 `d90145b…`（发布提交）；之后每次发布都要用 `git rev-parse HEAD` 更新 `source.commit`，否则市场安装到的是旧提交。npm 发布后改用 npm 源即可不再维护 commit。
 - 新增插件时把图标放到 `site/icons/`，索引里写相对路径 `icons/<name>.svg`。
 
 ## 五、提交社区市场（非官方，但能被搜到）

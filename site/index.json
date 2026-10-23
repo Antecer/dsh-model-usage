@@ -32,7 +32,7 @@
           "source": {
             "type": "git",
             "url": "https://github.com/Antecer/dsh-model-usage",
-            "commit": "7b7bb641efb184212a593610070ab77c1f70e470"
+            "commit": "d90145bd58c63a47cb7d6b62c1a9ef1f4e6f957c"
           },
           "engines": {
             "dsh": ">=0.2.0-rc.2 <0.3.0"
