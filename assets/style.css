@@ -482,30 +482,11 @@
     gap: 3px;
 
     & .dmu-heat-cell {
-      position: relative;
       width: 10px;
       height: 10px;
       border-radius: 2px;
       /* 兜底占位灰：零用量格由 CSS 保证可见（内联色阶覆盖之） */
       background: color-mix(in srgb, var(--dsw-alias-label-tertiary, #98a2b3) 25%, #fff);
-
-      /* 自绘悬停提示：显示在格子上方居中，避免被指针遮挡（原生 title 在指针右下） */
-      &:hover::after {
-        content: attr(data-tip);
-        position: absolute;
-        bottom: calc(100% + 6px);
-        left: 50%;
-        transform: translateX(-50%);
-        padding: 3px 8px;
-        border-radius: 6px;
-        background: var(--dsw-alias-label-primary, #191f28);
-        color: var(--dsw-alias-label-on-color, #fff);
-        font-size: 11px;
-        line-height: 1.4;
-        white-space: nowrap;
-        pointer-events: none;
-        z-index: 20;
-      }
     }
   }
 }
@@ -920,18 +901,21 @@
   .dmu-chev { transition: none; }
 }
 
-/* 悬停提示边缘对齐：左端列向左对齐、右端列向右对齐，避免溢出可视范围 */
-.dmu-heat-grid .dmu-heat-cell.dmu-tip-left:hover::after {
-  left: 0;
-  transform: none;
-}
+/* 悬停提示（JS 实测钳位）：相对热力图容器绝对定位，宽度由内容决定 */
+.dmu-heat { position: relative; }
 
-.dmu-heat-grid .dmu-heat-cell.dmu-tip-right:hover::after {
-  left: auto;
-  right: 0;
-  transform: none;
+.dmu-heat-tip {
+  position: absolute;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--dsw-alias-label-primary, #191f28);
+  color: var(--dsw-alias-label-on-color, #fff);
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 20;
 }
-
 
 /* 会话统计第一列：常规字重；单行显示，超长时按字符截断
    （text-overflow: ellipsis 即字符级切断，继承基础规则的 nowrap/ellipsis）。

@@ -177,7 +177,7 @@ test('右栏顶部固定摘要：今日/本周/本月/全部 + 近 12 个月热�
   assert.ok(!text(summary).includes('用量热力图'), '热力图不应再有标题（仅保留月份信息）')
   const cells = summary.querySelectorAll('.dmu-heat-cell')
   assert.ok(cells.length > 51 * 7, '热力图应渲染近 12 个月（52 周）格子')
-  const tips = [...cells].map((c) => c.getAttribute('data-tip') || '')
+  const tips = [...cells].map((c) => c.getAttribute('aria-label') || '')
   assert.ok(tips.some((s) => s.includes('600 tokens') && s.includes('调用 3 次')), '悬停提示应含日期/tokens/调用次数；实际样本: ' + JSON.stringify(tips.filter(Boolean).slice(-4)))
   assert.ok(tips.some((s) => s.includes('0 tokens')), '零用量格也应有提示（占位格可见）')
   assert.ok(!tips.some((s) => s.includes('undefined')), '缺 requests 字段时不应显示 undefined')
@@ -189,6 +189,41 @@ test('右栏顶部固定摘要：今日/本周/本月/全部 + 近 12 个月热�
     assert.ok(filled[i] - filled[i - 1] >= 3, '相邻月份标签间距应 >= 3 列（实际 ' + filled.join(',') + '）')
   }
   await unmount()
+})
+
+test('热力图悬停提示：悬停显示实测钳位提示，离开消失', async (t) => {
+  const { container, click, unmount } = await renderPlugin(t, )
+  await click(container.querySelector('.dmu-pcard'))
+  const summary = document.querySelector('.dmu-overlay .dmu-summary')
+  const cells = [...summary.querySelectorAll('.dmu-heat-cell')]
+  const target = cells.find((c) => (c.getAttribute('aria-label') || '').includes('600 tokens')) // 今日数据格
+  assert.ok(target, '应找到今日数据格')
+  const { act } = (await import('react')).default
+  await act(async () => { target.dispatchEvent(new window.MouseEvent('mouseover', { bubbles: true })) })
+  const tip = summary.querySelector('.dmu-heat-tip')
+  assert.ok(tip, '悬停应渲染实测提示元素')
+  assert.ok(tip.textContent.includes('600 tokens') && tip.textContent.includes('调用 3 次'), '提示内容应为日期/tokens/调用次数')
+  await act(async () => { target.dispatchEvent(new window.MouseEvent('mouseout', { bubbles: true })) })
+  assert.ok(!summary.querySelector('.dmu-heat-tip'), '离开后提示应消失')
+  await unmount()
+})
+
+// clampTipLeft 纯函数：抽取 client.js 内联实现做边界断言
+function loadClampTipLeft() {
+  const src = readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8')
+  const start = src.indexOf('function clampTipLeft')
+  const end = src.indexOf('/**', start + 10)
+  assert.ok(start > 0 && end > start, 'client.js 应包含 clampTipLeft')
+  return new Function(src.slice(start, end) + '\nreturn clampTipLeft')()
+}
+
+test('clampTipLeft：按提示宽度钳位在容器内，无布局信息时退化居中', () => {
+  const clamp = loadClampTipLeft()
+  assert.equal(clamp(400, 200, 960), 300, '中间位置居中')
+  assert.equal(clamp(20, 200, 960), 0, '左缘钳到 0')
+  assert.equal(clamp(950, 200, 960), 760, '右缘钳到 容器宽-提示宽')
+  assert.equal(clamp(50, 2000, 960), 0, '提示比容器还宽时钳到 0')
+  assert.equal(clamp(123, 200, 0), 123, '无布局信息（hostW=0）退化为居中')
 })
 
 test('模型统计展开后：统一五列信息列；无偏好时默认全收起', async (t) => {
