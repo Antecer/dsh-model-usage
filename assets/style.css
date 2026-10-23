@@ -948,3 +948,89 @@
 .dmu-mcalls .dmu-mrow-call .dmu-mname {
   padding-left: 14px;
 }
+
+/* ---------- 「可重置额度」弹窗（ZCode 同款） ---------- */
+/* 全纵向布局：弹窗相应收窄 */
+.dmu-dialog-quota { width: 400px; }
+
+/* 上半：当前额度卡片（全纵向排列：5h → 周 → MCP） */
+.dmu-quota-cards {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+
+  & .dmu-quota-card {
+    padding: 10px 12px;
+    border-radius: var(--dsw-radius-md, 10px);
+    background: var(--dsw-alias-bg-layer-2, #f5f7fa);
+
+    & .k { font-size: 11px; color: var(--dsw-alias-label-secondary, #637182); }
+
+    & .v {
+      margin-top: 4px;
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--dsw-alias-label-primary, #191f28);
+      font-variant-numeric: tabular-nums;
+
+      & small { font-size: 11px; font-weight: 400; color: var(--dsw-alias-label-tertiary, #98a2b3); }
+    }
+  }
+}
+
+.dmu-quota-track {
+  margin-top: 8px;
+  height: 5px;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--dsw-alias-label-tertiary, #98a2b3) 25%, #fff);
+  overflow: hidden;
+
+  & span { display: block; height: 100%; border-radius: 99px; }
+}
+
+/* 下半：重置行 */
+.dmu-quota-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--dsw-radius-md, 10px);
+  background: var(--dsw-alias-bg-layer-2, #f5f7fa);
+
+  & .dmu-quota-row-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--dsw-alias-label-primary, #191f28);
+  }
+
+  & .dmu-quota-row-sub {
+    margin-top: 2px;
+    font-size: 11px;
+    color: var(--dsw-alias-label-tertiary, #98a2b3);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* 次数药丸（绿色，与 ZCode 一致） */
+.dmu-pill-green {
+  border: none;
+  background: var(--dsw-alias-state-success-primary, #12b76a);
+  color: var(--dsw-alias-label-on-color, #fff);
+}
+
+/* 重置按钮（绿色描边） */
+.dmu-quota-use {
+  border-color: var(--dsw-alias-state-success-primary, #12b76a);
+  color: var(--dsw-alias-state-success-primary, #12b76a);
+  background: color-mix(in srgb, var(--dsw-alias-state-success-primary, #12b76a) 10%, transparent);
+
+  &:hover { background: color-mix(in srgb, var(--dsw-alias-state-success-primary, #12b76a) 16%, transparent); }
+  &:disabled { opacity: 0.55; }
+}

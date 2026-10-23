@@ -440,24 +440,33 @@ test('GLM 卡片：账户小按钮 + 窗口重置按钮（含机会数）', asyn
   await unmount()
 })
 
-test('重置二次确认弹窗：可取消；确认后调用 resetUse 并刷新', async (t) => {
+test('可重置额度弹窗（ZCode 同款）：额度卡片 + 重置行 + 核销流程', async (t) => {
   const { container, click, calls, unmount } = await renderPlugin(t, )
   await click(container.querySelector('.dmu-win-foot .dmu-resetbtn'))
   let dialog = document.querySelector('.dmu-dialog')
-  assert.ok(dialog, '点击重置应弹出确认对话框')
-  assert.ok(text(dialog).includes('确认重置 5 小时额度'), '对话框应说明重置后果')
-  assert.ok(text(dialog).includes('剩余 2 次机会'), '对话框应显示剩余机会数')
-  // 取消：对话框关闭且不发请求
-  await click([...dialog.querySelectorAll('button')].find((b) => text(b) === '取消'))
-  assert.ok(!document.querySelector('.dmu-dialog'), '取消应关闭对话框')
-  assert.ok(!calls.some((c) => c.endpoint === 'resetUse'), '取消不应发起核销请求')
-  // 重新打开并确认
+  assert.ok(dialog, '点击重置应弹出「可重置额度」对话框')
+  // 上半：当前额度卡片（5h / 周，剩余百分比 + 色条）
+  assert.ok(text(dialog).includes('可重置额度'), '标题应为可重置额度')
+  const cards = [...dialog.querySelectorAll('.dmu-quota-card')]
+  assert.equal(cards.length, 2, '应有 5h 与周两张额度卡片')
+  assert.ok(text(cards[0]).includes('100%'), '5h 未开始应显示剩余 100%')
+  assert.ok(text(cards[1]).includes('8%'), '周 92% 已用应显示剩余 8%')
+  // 下半：两类重置行（次数药丸 + 重置按钮）
+  const rows = [...dialog.querySelectorAll('.dmu-quota-row')]
+  assert.equal(rows.length, 2, '应有 5 小时与周两条重置行')
+  assert.ok(text(rows[0]).includes('5 小时额度重置') && text(rows[0]).includes('2 次'), '5 小时行应含次数药丸')
+  assert.ok(text(rows[1]).includes('周额度重置') && text(rows[1]).includes('7 次'), '周行应含次数药丸')
+  // 关闭（X）：不发核销请求
+  await click(dialog.querySelector('.dmu-headbtn'))
+  assert.ok(!document.querySelector('.dmu-dialog'), '关闭应退出对话框')
+  assert.ok(!calls.some((c) => c.endpoint === 'resetUse'), '关闭不应发起核销请求')
+  // 重新打开并点 5 小时行的重置按钮
   await click(container.querySelector('.dmu-win-foot .dmu-resetbtn'))
   dialog = document.querySelector('.dmu-dialog')
-  await click([...dialog.querySelectorAll('button')].find((b) => text(b) === '确认重置'))
+  await click(dialog.querySelectorAll('.dmu-quota-row')[0].querySelector('.dmu-quota-use'))
   const useCalls = calls.filter((c) => c.endpoint === 'resetUse')
   assert.equal(useCalls.length, 1, '确认应发起一次核销')
-  assert.equal(useCalls[0].payload.type, 'FIVE_HOUR', '5h 窗口应对应 FIVE_HOUR')
+  assert.equal(useCalls[0].payload.type, 'FIVE_HOUR', '5 小时行应对应 FIVE_HOUR')
   await new Promise((r) => setTimeout(r, 700)) // 成功打勾 600ms 后自动关闭
   await new Promise((r) => setTimeout(r, 0))
   assert.ok(!document.querySelector('.dmu-dialog'), '成功后对话框应自动关闭')

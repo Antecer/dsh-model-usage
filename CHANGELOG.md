@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- 「可重置额度」弹窗额度卡片改为全纵向排列（5h → 周 → MCP），弹窗宽度相应收窄至 400px
+
+- GLM 重置确认弹窗升级为 ZCode「可重置额度」同款：上半为当前额度卡片（5h/周/MCP，剩余百分比 + 绝对重置时间 + 类型色条），下半为 5 小时/周两条重置行（次数药丸 + 最早过期秒级倒计时 + 绿色重置按钮），点行内按钮即核销（弹窗本身即二次确认）
+
+- 新建对话卡片不跟随的彻底修复：①供应商判定链补齐为 modelSelection.next/lastUsed → session.requestHeader logged 供应商 → agentDefaultModel 默认模型（与 api-session 的 selection.current 完全同口径）；②新会话绑定/投影未就绪时有限退避自动重试（5 次指数退避、代际保护），就绪即跟随，不再依赖用户点模型或发消息触发
+
+- 修复新建对话时左下角卡片不立即跟随的问题：新会话 modelSelection 无记录（next/lastUsed 均空）时，回退到 DSH 默认模型 ctx.agentDefaultModel.currentSelection()（与 api-session 消费默认值的口径一致，经 asar 源码实证）；用户点选模型或发送消息后照常覆盖
+
 - 统计范围默认选中改为「全部」（原「今日」）：历史统计等分区默认展示全量数据，用户需要聚焦时再主动切换范围；上次选择的偏好仍经 localStorage 恢复
 
 - 热力图悬停提示改为 JS 实测钳位：悬停时测量单元格与容器位置，按提示实际宽度用 clampTipLeft 钳制在容器内（先离屏测量避免闪动），替代按列位置猜测的贴边方案

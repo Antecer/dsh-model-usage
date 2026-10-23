@@ -184,3 +184,101 @@ test('dispose 后停止监听，后续变化不再回调', async () => {
   await immediate()
   assert.deepEqual(routes, ['X'])
 })
+
+test('新建对话无选择时立即回退到 agentDefaultModel 默认供应商', async () => {
+  const sessions = makeSessions(['a'], { a: makeBinding(null) }, 'a')
+  const routes = []
+  const ctx = {
+    sessions,
+    get: (name) => (name === 'agentDefaultModel' ? { currentSelection: () => ({ provider: 'D' }) } : undefined),
+  }
+  const dispose = trackCurrentRoute(ctx, makeApi(null), (r) => routes.push(r))
+  await immediate()
+  assert.deepEqual(routes, ['D'], '新会话应立即跟随默认供应商，而不是等点模型/发消息')
+
+  const face = sessions.binding('a').session.projections.faceOf('modelSelection')
+  face._set({ next: { provider: 'X' }, lastUsed: null })
+  await immediate()
+  assert.deepEqual(routes, ['D', 'X'], '用户选择后覆盖默认值')
+  dispose()
+})
+
+test('会话已有选择时不使用 agentDefaultModel 默认值', async () => {
+  const sessions = makeSessions(['a'], { a: makeBinding('Y') }, 'a')
+  const routes = []
+  const ctx = {
+    sessions,
+    get: () => ({ currentSelection: () => ({ provider: 'D' }) }),
+  }
+  const dispose = trackCurrentRoute(ctx, makeApi(null), (r) => routes.push(r))
+  await immediate()
+  assert.deepEqual(routes, ['Y'], '已有选择优先于默认值')
+  dispose()
+})
+
+test('agentDefaultModel 不可用（cordis 未提供该服务）时新会话不切换', async () => {
+  const sessions = makeSessions(['a'], { a: makeBinding(null) }, 'a')
+  const routes = []
+  const ctx = { sessions, get: () => { throw new Error('service not found') } }
+  const dispose = trackCurrentRoute(ctx, makeApi(null), (r) => routes.push(r))
+  await immediate()
+  assert.deepEqual(routes, [], '服务缺失时静默不切换（保持现状）')
+  dispose()
+})
+
+test('新会话投影未就绪时自动重试，就绪后立即跟随', async () => {
+  let calls = 0
+  const face = makeFace({ next: null, lastUsed: null })
+  const binding = {
+    session: {
+      projections: { faceOf: () => (++calls > 2 ? face : null) },
+    },
+  }
+  const sessions = makeSessions(['a'], { a: binding }, 'a')
+  const routes = []
+  const ctx = {
+    sessions,
+    get: (name) => (name === 'agentDefaultModel' ? { currentSelection: () => ({ provider: 'D' }) } : undefined),
+  }
+  const dispose = trackCurrentRoute(ctx, makeApi(null), (r) => routes.push(r))
+  await immediate()
+  assert.deepEqual(routes, [], '未就绪期间不应有误报')
+  await new Promise((r) => setTimeout(r, 700)) // 200ms + 400ms 两次重试窗口
+  assert.deepEqual(routes, ['D'], '投影就绪后回退默认供应商')
+  dispose()
+})
+
+test('新会话无选择但有历史请求头时跟随 requestHeader 供应商', async () => {
+  const face = makeFace({ next: null, lastUsed: null })
+  const binding = {
+    session: {
+      projections: { faceOf: () => face },
+      requestHeader: () => ({ config: { provider: 'H', model: 'm1' } }),
+    },
+  }
+  const sessions = makeSessions(['a'], { a: binding }, 'a')
+  const routes = []
+  const ctx = {
+    sessions,
+    get: (name) => (name === 'agentDefaultModel' ? { currentSelection: () => ({ provider: 'D' }) } : undefined),
+  }
+  const dispose = trackCurrentRoute(ctx, makeApi(null), (r) => routes.push(r))
+  await immediate()
+  assert.deepEqual(routes, ['H'], 'logged 请求头优先于 agentDefaultModel')
+  dispose()
+})
+
+test('重试期间切换会话：旧重试不再生效（代际保护）', async () => {
+  let aCalls = 0
+  const aBinding = { session: { projections: { faceOf: () => (++aCalls > 5 ? makeFace({ next: null, lastUsed: null }) : null) } } }
+  const bBinding = makeBinding('B')
+  const sessions = makeSessions(['a', 'b'], { a: aBinding, b: bBinding }, 'a')
+  const routes = []
+  const ctx = { sessions, get: () => undefined }
+  const dispose = trackCurrentRoute(ctx, makeApi(null), (r) => routes.push(r))
+  await immediate()
+  sessions._setMainView('b') // 立即切到 b：a 的重试应被代际作废
+  await new Promise((r) => setTimeout(r, 700))
+  assert.deepEqual(routes, ['B'], '只应有 b 的选择，a 的迟来就绪不得插播')
+  dispose()
+})
