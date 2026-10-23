@@ -1,0 +1,966 @@
+/* dsh-model-usage · 插件样式（原生 CSS 嵌套 + flex 布局，全部使用 DSH 主题 token） */
+
+/* ---------- 供应商图标 ---------- */
+.dmu-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--dsw-alias-bg-layer-1, #fff);
+  border: 1px solid var(--dsw-alias-border-l1, #e3e7ed);
+  user-select: none;
+
+  & img { display: block; object-fit: contain; }
+
+  &.dmu-logo-fallback {
+    border: none;
+    background: linear-gradient(135deg, var(--dsw-alias-state-business-primary, #4176e6), var(--dsw-alias-bg-layer-2, #6b7480));
+    color: #fff;
+    font-weight: 600;
+  }
+}
+
+/* ---------- 状态圆点 ---------- */
+.dmu-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+
+  &.dmu-dot-ok { background: var(--dsw-alias-state-success-primary, #12b76a); }
+  &.dmu-dot-warn { background: var(--dsw-alias-state-warn-primary, #f79009); }
+  &.dmu-dot-error { background: var(--dsw-alias-state-error-primary, #f04438); }
+  &.dmu-dot-idle { background: var(--dsw-alias-label-tertiary, #98a2b3); }
+}
+
+/* ---------- 侧栏包裹 ---------- */
+/* 左右不再自留外边距，与侧栏「新会话」等原生按钮的边缘对齐（由 slot 容器统一留白） */
+.dmu-footwrap {
+  flex: none;
+  width: 100%;
+  margin: 2px 0 4px;
+}
+
+/* 紧凑态（侧栏折叠时）：仅图标 + 状态点 */
+.dmu-foot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: inherit;
+  cursor: pointer;
+  border: 1px solid transparent;
+  background: none;
+  color: var(--dsw-alias-label-primary, #191f28);
+
+  &.dmu-foot-compact {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    margin: 2px auto 4px;
+    position: relative;
+    border-radius: var(--dsw-radius-md, 10px);
+
+    &:hover { background: var(--dsw-alias-interactive-bg-hover, rgba(2, 6, 16, 0.06)); }
+    & .dmu-dot { position: absolute; top: 3px; right: 3px; }
+  }
+}
+
+/* ---------- 供应商卡片（侧栏与弹窗左列共用，旧版规格） ---------- */
+.dmu-pcard {
+  position: relative; /* 账户图标绝对定位锚点 */
+  display: flex;
+  flex-direction: column;
+  padding: 10px 12px;
+  border: 1px solid var(--dsw-alias-settings-card-stroke, var(--dsw-alias-border-l1, #e3e7ed));
+  border-radius: 12px;
+  background: var(--dsw-alias-settings-card-fill, var(--dsw-alias-bg-layer-1, #fff));
+  color: var(--dsw-alias-label-primary, #191f28);
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+
+  &:hover {
+    border-color: var(--dsw-alias-border-l2, var(--dsw-alias-border-l1, #d8dce2));
+    box-shadow: var(--dsw-shadow-lv1, 0 2px 8px rgba(2, 6, 16, 0.06));
+  }
+
+  &:focus-visible {
+    outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary, #4176e6));
+    outline-offset: 2px;
+  }
+
+  &.active { border-color: var(--dsw-alias-state-business-primary, #4176e6); }
+
+  /* 状态：顶部彩色线条（充裕绿 / 偏高橙 / 紧急红） */
+  &.dmu-st-ok { border-top: 2px solid var(--dsw-alias-state-success-primary, #12b76a); }
+  &.dmu-st-warn { border-top: 2px solid var(--dsw-alias-state-warn-primary, #f79009); }
+  &.dmu-st-error { border-top: 2px solid var(--dsw-alias-state-error-primary, #f04438); }
+
+  /* 顶行：图标 + 名称 + route + 套餐 + 状态 + 时间 + 刷新 */
+  & .dmu-pcard-top {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+
+    & .dmu-pcard-name {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    & .dmu-pcard-route {
+      font-size: 12px;
+      font-weight: 400;
+      color: var(--dsw-alias-label-tertiary, #98a2b3);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      flex-shrink: 1;
+      min-width: 0;
+    }
+
+    & .dmu-pcard-side {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: none;
+
+      & .dmu-pcard-time {
+        font-size: 12px;
+        font-weight: 400;
+        color: var(--dsw-alias-label-tertiary, #98a2b3);
+        font-variant-numeric: tabular-nums;
+      }
+    }
+  }
+
+  & .dmu-cap {
+    margin-top: 4px;
+    font-size: 12px;
+    color: var(--dsw-alias-label-secondary, #637182);
+    overflow-wrap: anywhere;
+    line-height: 1.5;
+  }
+}
+
+/* 主指标大数字（旧版 28px 规格） */
+.dmu-big {
+  margin-top: 7px;
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  line-height: 1;
+  color: var(--dsw-alias-label-primary, #191f28);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+
+  & small { font-size: 13px; font-weight: 600; margin-left: 3px; color: var(--dsw-alias-label-secondary, #637182); }
+
+  & .dmu-biglabel {
+    font-size: 13px;
+    font-weight: 600;
+    margin-left: 3px;
+    color: var(--dsw-alias-label-secondary, #637182);
+  }
+}
+
+/* 图标按钮（刷新） */
+.dmu-iconbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: none;
+  color: var(--dsw-alias-label-tertiary, #98a2b3);
+  font-size: 13px;
+  cursor: pointer;
+
+  &:hover { background: var(--dsw-alias-interactive-bg-hover, rgba(2, 6, 16, 0.06)); color: var(--dsw-alias-label-secondary, #637182); }
+  &:disabled { opacity: 0.55; cursor: default; }
+}
+
+/* 迷你窗口条（侧栏卡片内） */
+.dmu-miniwin {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 10.5px;
+  color: var(--dsw-alias-label-secondary, #637182);
+  font-variant-numeric: tabular-nums;
+
+  & .dmu-miniwin-label { flex: none; min-width: 30px; }
+
+  & .dmu-miniwin-track {
+    flex: 1;
+    height: 5px;
+    border-radius: 99px;
+    /* 占位条：计时文字灰减淡一半，耗尽后仍可见 */
+    background: color-mix(in srgb, var(--dsw-alias-label-tertiary, #98a2b3) 25%, #fff);
+    overflow: hidden;
+
+    & .dmu-miniwin-fill {
+      display: block;
+      height: 100%;
+      width: var(--dmu-fill, 0%);
+      border-radius: 99px;
+      background: var(--dsw-alias-state-business-primary, #4176e6);
+    }
+  }
+
+  & b { flex: none; font-weight: 600; color: var(--dsw-alias-label-primary, #191f28); }
+
+  &.dmu-win-warn .dmu-miniwin-fill { background: var(--dsw-alias-state-warn-primary, #f79009); }
+  &.dmu-win-err .dmu-miniwin-fill { background: var(--dsw-alias-state-error-primary, #f04438); }
+}
+
+/* ---------- 遮罩弹窗（限高 + 双列） ---------- */
+.dmu-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--dsw-alias-overlay, rgba(2, 6, 16, 0.4));
+}
+
+.dmu-modal {
+  display: flex;
+  flex-direction: column;
+  /* 宽度贴合 52 列热力图：左列 260px + 右栏 padding 28px + 热力图 673px（52×13-3） */
+  width: 960px;
+  max-width: calc(100vw - 48px);
+  /* 限高：与设置页相近的高度，超出滚动而非无限拉伸 */
+  height: min(74vh, 760px);
+  background: var(--dsw-alias-bg-layer-1, #fff);
+  border: 1px solid var(--dsw-alias-border-l1, #e3e7ed);
+  border-radius: 16px;
+  box-shadow: var(--dsw-shadow-lv2, 0 12px 40px rgba(2, 6, 16, 0.16));
+  overflow: hidden;
+
+  & .dmu-modal-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--dsw-alias-border-l1, #eceff3);
+    flex: none;
+
+    & .dmu-modal-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--dsw-alias-label-primary, #191f28);
+      flex: 1;
+    }
+  }
+
+  & .dmu-cols {
+    display: flex;
+    flex: 1;
+    min-height: 0; /* 允许子列滚动 */
+  }
+}
+
+/* ---------- 按钮 ---------- */
+.dmu-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border: 1px solid var(--dsw-alias-border-l1, #e3e7ed);
+  border-radius: var(--dsw-radius-md, 10px);
+  background: transparent;
+  color: var(--dsw-alias-label-primary, #191f28);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+
+  &:hover { background: var(--dsw-alias-interactive-bg-hover, rgba(2, 6, 16, 0.04)); }
+  &:disabled { opacity: 0.55; cursor: default; }
+
+  &:focus-visible {
+    outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary, #4176e6));
+    outline-offset: 2px;
+  }
+
+  &.dmu-btn-primary {
+    background: var(--dsw-alias-state-business-primary, #4176e6);
+    border-color: var(--dsw-alias-state-business-primary, #4176e6);
+    color: var(--dsw-alias-label-on-color, #fff);
+
+    &:hover { background: var(--dsw-alias-state-business-primary, #4176e6); filter: brightness(1.05); }
+  }
+}
+
+/* ---------- 左列顶部工具栏（全部刷新 / 用量总览） ---------- */
+.dmu-toolbar {
+  display: flex;
+  gap: 6px;
+  flex: none;
+  margin-bottom: 2px;
+
+  & .dmu-toolbtn {
+    flex: 1;
+    justify-content: center;
+    padding: 5px 8px;
+    font-size: 12px;
+    white-space: nowrap;
+    /* 明显的灰色边框与底色，与文字工具项区分开 */
+    border: 1px solid var(--dsw-alias-label-tertiary, #98a2b3);
+    background: var(--dsw-alias-bg-layer-1, #fff);
+    border-radius: var(--dsw-radius-md, 10px);
+
+    &.active {
+      background: var(--dsw-alias-label-primary, #191f28);
+      border-color: var(--dsw-alias-label-primary, #191f28);
+      color: var(--dsw-alias-label-on-color, #fff);
+    }
+  }
+}
+
+/* ---------- 左列：供应商列表 ---------- */
+.dmu-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 240px;
+  flex: none;
+  padding: 10px;
+  border-right: 1px solid var(--dsw-alias-border-l1, #eceff3);
+  overflow-y: auto;
+
+  & .dmu-list-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 10px;
+    border: 1px solid transparent;
+    border-radius: var(--dsw-radius-md, 10px);
+    background: transparent;
+    color: var(--dsw-alias-label-primary, #191f28);
+    font: inherit;
+    cursor: pointer;
+    text-align: left;
+
+    &:hover { background: var(--dsw-alias-interactive-bg-hover, rgba(2, 6, 16, 0.04)); }
+
+    &.active {
+      background: var(--dsw-alias-settings-card-fill, var(--dsw-alias-bg-layer-2, #f5f7fa));
+      border-color: var(--dsw-alias-settings-card-stroke, var(--dsw-alias-border-l1, #e3e7ed));
+    }
+
+    &:focus-visible {
+      outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary, #4176e6));
+      outline-offset: 2px;
+    }
+
+    & .dmu-list-text {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+      min-width: 0;
+      flex: 1;
+
+      & .dmu-list-name {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        font-weight: 600;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+
+        & .dmu-tag {
+          font-style: normal;
+          font-size: 10px;
+          font-weight: 600;
+          padding: 1px 6px;
+          border-radius: 999px;
+          background: var(--dsw-alias-state-business-primary, #4176e6);
+          color: var(--dsw-alias-label-on-color, #fff);
+        }
+      }
+
+      & .dmu-list-metric {
+        font-size: 11px;
+        color: var(--dsw-alias-label-secondary, #637182);
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+    }
+  }
+}
+
+/* ---------- 右列：固定摘要 + 分区滚动区 ---------- */
+.dmu-detail {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden; /* 顶部摘要固定，仅下半部分滚动 */
+}
+
+/* 固定顶部：今日/本月/累计 + 热力图 */
+.dmu-summary {
+  flex: none;
+  padding: 12px 14px 10px;
+  border-bottom: 1px solid var(--dsw-alias-border-l1, #eceff3);
+
+  & .dmu-sumcards {
+    display: flex;
+    gap: 8px;
+
+    & .dmu-sumcard {
+      flex: 1;
+      min-width: 0;
+      padding: 10px 12px;
+      border-radius: var(--dsw-radius-md, 10px);
+      background: var(--dsw-alias-bg-layer-2, #f5f7fa);
+
+      & .k { font-size: 12px; color: var(--dsw-alias-label-secondary, #637182); }
+
+      & .v {
+        margin-top: 4px;
+        font-size: 20px;
+        font-weight: 700;
+        color: var(--dsw-alias-label-primary, #191f28);
+        font-variant-numeric: tabular-nums;
+        line-height: 1;
+
+        & small { font-size: 11px; font-weight: 500; margin-left: 4px; color: var(--dsw-alias-label-tertiary, #98a2b3); }
+      }
+
+      & .s {
+        margin-top: 4px;
+        font-size: 11px;
+        color: var(--dsw-alias-label-secondary, #637182);
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+    }
+  }
+}
+
+/* 26 周热力图（列=周，行=星期） */
+.dmu-heat {
+  margin-top: 10px;
+
+  & .dmu-heat-months {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 13px;
+    margin-bottom: 3px;
+    font-size: 10px;
+    color: var(--dsw-alias-label-tertiary, #98a2b3);
+
+    & span { white-space: nowrap; }
+  }
+
+  & .dmu-heat-grid {
+    display: grid;
+    grid-template-rows: repeat(7, 10px);
+    grid-auto-flow: column;
+    grid-auto-columns: 10px;
+    gap: 3px;
+
+    & .dmu-heat-cell {
+      position: relative;
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+      /* 兜底占位灰：零用量格由 CSS 保证可见（内联色阶覆盖之） */
+      background: color-mix(in srgb, var(--dsw-alias-label-tertiary, #98a2b3) 25%, #fff);
+
+      /* 自绘悬停提示：显示在格子上方居中，避免被指针遮挡（原生 title 在指针右下） */
+      &:hover::after {
+        content: attr(data-tip);
+        position: absolute;
+        bottom: calc(100% + 6px);
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 3px 8px;
+        border-radius: 6px;
+        background: var(--dsw-alias-label-primary, #191f28);
+        color: var(--dsw-alias-label-on-color, #fff);
+        font-size: 11px;
+        line-height: 1.4;
+        white-space: nowrap;
+        pointer-events: none;
+        z-index: 20;
+      }
+    }
+  }
+}
+
+/* 下半部分滚动区（tabs + 折叠分区） */
+.dmu-pane-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 10px 14px 12px;
+}
+
+/* 折叠分区 */
+.dmu-sec {
+  & .dmu-sec-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    padding: 4px 0;
+    border: none;
+    background: none;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--dsw-alias-label-primary, #191f28);
+    cursor: pointer;
+    text-align: left;
+
+    & .dmu-sec-arrow { color: var(--dsw-alias-label-tertiary, #98a2b3); width: 12px; }
+    &:hover .dmu-sec-arrow { color: var(--dsw-alias-label-secondary, #637182); }
+  }
+
+  & .dmu-sec-body { padding: 4px 0 2px 18px; }
+}
+
+/* 模型/渠道统计行：名称 | Tokens 堆叠条 | 命中率 */
+.dmu-mtable {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  & .dmu-mrow {
+    display: grid;
+    grid-template-columns: minmax(80px, 1.2fr) 2.2fr 1fr;
+    /* 列间距（统计数字列紧凑排列） */
+    gap: 12px;
+    align-items: center;
+    font-size: 12.5px;
+
+    &.dmu-mrow-head {
+      font-size: 11px;
+      color: var(--dsw-alias-label-tertiary, #98a2b3);
+    }
+
+    & .dmu-mname {
+      font-weight: 600;
+      color: var(--dsw-alias-label-primary, #191f28);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+  }
+}
+
+/* 弹窗左列卡片仅展示（不再点击切换右栏） */
+.dmu-list .dmu-pcard { cursor: default; }
+
+/* ---------- 套餐徽标（旧版浅色描边） ---------- */
+.dmu-pill {
+  flex: none;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--dsw-alias-border-l1, #e3e7ed);
+  background: var(--dsw-alias-bg-layer-2, #f5f7fa);
+  color: var(--dsw-alias-label-secondary, #637182);
+  white-space: nowrap;
+}
+
+/* ---------- 弹窗头部图标按钮（GitHub / X） ---------- */
+.dmu-headbtn {
+  width: 30px;
+  height: 30px;
+  font-size: 14px;
+}
+
+/* ---------- 统计范围切换（当天/近7天/近30天） ---------- */
+.dmu-tabs {
+  display: flex;
+  gap: 4px;
+  flex: none;
+
+  & .dmu-tab {
+    padding: 4px 12px;
+    border: 1px solid var(--dsw-alias-border-l1, #e3e7ed);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--dsw-alias-label-secondary, #637182);
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+
+    &:hover { background: var(--dsw-alias-interactive-bg-hover, rgba(2, 6, 16, 0.04)); }
+
+    &.active {
+      background: var(--dsw-alias-label-primary, #191f28);
+      border-color: var(--dsw-alias-label-primary, #191f28);
+      color: var(--dsw-alias-label-on-color, #fff);
+    }
+
+    &:focus-visible {
+      outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary, #4176e6));
+      outline-offset: 2px;
+    }
+  }
+}
+
+/* ---------- 额度窗口 ---------- */
+.dmu-wins {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+
+  & .dmu-win {
+    display: flex;
+    flex-direction: column;
+
+    & .dmu-win-head {
+      display: flex;
+      align-items: baseline;
+      font-size: 12.5px;
+      color: var(--dsw-alias-label-secondary, #637182);
+      margin-bottom: 3px;
+
+      & .dmu-win-label { font-weight: 600; color: var(--dsw-alias-label-primary, #191f28); margin-right: 8px; }
+      & b { margin-left: auto; color: var(--dsw-alias-label-primary, #191f28); font-variant-numeric: tabular-nums; }
+    }
+
+    & .dmu-win-track {
+      height: 6px;
+      border-radius: 99px;
+      /* 占位条：计时文字灰减淡一半，耗尽后仍可见 */
+      background: color-mix(in srgb, var(--dsw-alias-label-tertiary, #98a2b3) 25%, #fff);
+      overflow: hidden;
+
+      & .dmu-win-fill {
+        height: 100%;
+        width: var(--dmu-fill, 0%);
+        border-radius: 99px;
+        background: var(--dsw-alias-label-primary, #191f28);
+        transition: width 0.4s ease;
+      }
+    }
+
+    & .dmu-win-foot {
+      margin-top: 3px;
+      font-size: 12px;
+      color: var(--dsw-alias-label-tertiary, #98a2b3);
+    }
+  }
+}
+
+/* ---------- KPI / 趋势 / 最近请求 ---------- */
+.dmu-kpis {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+
+  & .dmu-kpi {
+    flex: 1;
+    min-width: 110px;
+    padding: 12px 14px;
+    border: none;
+    border-radius: var(--dsw-radius-md, 10px);
+    background: var(--dsw-alias-bg-layer-2, #f5f7fa);
+
+    & .k { font-size: 12px; color: var(--dsw-alias-label-secondary, #637182); }
+
+    & .v {
+      margin-top: 5px;
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--dsw-alias-label-primary, #191f28);
+      font-variant-numeric: tabular-nums;
+    }
+  }
+}
+
+.dmu-trend {
+  margin-top: 10px;
+
+  & .dmu-trend-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--dsw-alias-label-secondary, #637182);
+    margin-bottom: 8px;
+  }
+
+  & .dmu-trend-bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 3px;
+    height: 72px;
+
+    & .dmu-trend-bar {
+      flex: 1;
+      height: var(--dmu-bar, 2%);
+      min-height: 2px;
+      border-radius: 3px 3px 1px 1px;
+      background: var(--dsw-alias-state-business-primary, #4176e6);
+      opacity: 0.85;
+
+      &:hover { opacity: 0.7; }
+    }
+  }
+}
+
+.dmu-recent {
+  margin-top: 10px;
+
+  & .dmu-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12.5px;
+
+    & td {
+      padding: 6px 8px 6px 0;
+      border-bottom: 1px solid var(--dsw-alias-border-l1, #eceff3);
+      color: var(--dsw-alias-label-primary, #191f28);
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 220px;
+    }
+
+    & td.n { text-align: right; color: var(--dsw-alias-label-secondary, #637182); }
+    & tr:last-child td { border-bottom: none; }
+  }
+}
+
+/* ---------- 状态文案 ---------- */
+.dmu-err, .dmu-warn, .dmu-muted {
+  margin-top: 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.dmu-err {
+  color: var(--dsw-alias-state-error-primary, #f04438);
+  background: color-mix(in srgb, var(--dsw-alias-state-error-primary, #f04438) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--dsw-alias-state-error-primary, #f04438) 25%, transparent);
+  padding: 7px 10px;
+  border-radius: var(--dsw-radius-md, 10px);
+}
+
+.dmu-warn { color: var(--dsw-alias-state-warn-primary, #f79009); }
+.dmu-muted { color: var(--dsw-alias-label-tertiary, #98a2b3); }
+
+/* ---------- 余额构成条（充值/赠金） ---------- */
+.dmu-seg {
+  display: flex;
+  height: 8px;
+  margin-top: 8px;
+  border-radius: var(--dsw-radius-sm, 6px);
+  background: var(--dsw-alias-bg-base, #e4e8ee);
+  overflow: hidden;
+
+  & span { display: block; height: 100%; width: var(--dmu-seg, 0%); }
+  & span.a { background: var(--dsw-alias-state-business-primary, #4176e6); }
+  & span.b { background: var(--dsw-alias-state-warn-primary, #b36aee); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dmu-wins .dmu-win .dmu-win-track .dmu-win-fill { transition: none; }
+}
+
+/* ---------- GLM 卡片左上角 Logo 即账户入口（未连接灰度） ---------- */
+.dmu-logo-btn {
+  display: inline-flex;
+  cursor: pointer;
+  border-radius: 50%;
+  /* 未连接：灰度褪色 */
+  filter: grayscale(1);
+  opacity: 0.65;
+
+  &:hover, &:focus-visible { opacity: 1; }
+
+  /* 已连接：恢复本色 */
+  &.connected {
+    filter: none;
+    opacity: 1;
+  }
+}
+
+/* ---------- 窗口倒计时行右侧的重置按钮 ---------- */
+.dmu-win-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.dmu-resetbtn {
+  flex: none;
+  padding: 0 8px;
+  border: 1px solid var(--dsw-alias-state-success-primary, #12b76a);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--dsw-alias-state-success-primary, #12b76a);
+  font: inherit;
+  font-size: 11px;
+  line-height: 18px;
+  cursor: pointer;
+
+  &:hover { background: color-mix(in srgb, var(--dsw-alias-state-success-primary, #12b76a) 10%, transparent); }
+}
+
+/* ---------- 小型对话框（重置确认 / ZCode 账户） ---------- */
+.dmu-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 380px;
+  max-width: calc(100vw - 48px);
+  padding: 14px 16px;
+  background: var(--dsw-alias-bg-layer-1, #fff);
+  border: 1px solid var(--dsw-alias-border-l1, #e3e7ed);
+  border-radius: 14px;
+  box-shadow: var(--dsw-shadow-lv2, 0 12px 40px rgba(2, 6, 16, 0.16));
+  color: var(--dsw-alias-label-primary, #191f28);
+
+  & .dmu-dialog-head {
+    display: flex;
+    align-items: center;
+
+    & .dmu-dialog-title { flex: 1; font-size: 14px; font-weight: 700; }
+  }
+
+  & .dmu-dialog-body {
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--dsw-alias-label-primary, #191f28);
+
+    &.dmu-dialog-ok { color: var(--dsw-alias-state-success-primary, #12b76a); font-weight: 600; }
+  }
+
+  & .dmu-dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 4px;
+  }
+
+  & .dmu-input {
+    width: 100%;
+    margin-top: 6px;
+    padding: 6px 8px;
+    border: 1px solid var(--dsw-alias-border-l1, #e3e7ed);
+    border-radius: var(--dsw-radius-md, 10px);
+    background: var(--dsw-alias-bg-layer-1, #fff);
+    color: var(--dsw-alias-label-primary, #191f28);
+    font: inherit;
+    font-size: 12px;
+    resize: vertical;
+    box-sizing: border-box;
+
+    &:focus { outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary, #4176e6)); outline-offset: 1px; }
+  }
+}
+
+/* ---------- 模型统计行展开（每次调用列表） ---------- */
+.dmu-mrow-btn.clickable { cursor: pointer; border-radius: var(--dsw-radius-sm, 6px); }
+.dmu-mrow-btn.clickable:hover { background: var(--dsw-alias-interactive-bg-hover, rgba(2, 6, 16, 0.04)); }
+
+.dmu-dim { color: var(--dsw-alias-label-tertiary, #98a2b3); font-size: 11px; }
+
+/* 统计网格行的数字列（请求数/Tokens）右对齐等宽 */
+.dmu-mtable .dmu-mrow > .n {
+  text-align: right;
+  color: var(--dsw-alias-label-secondary, #637182);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 五列网格（所有统计分区与模型展开行共用同一模板）：
+   首列占主空间（2.4fr），数字列紧凑但有保底宽度，避免挤成一团 */
+.dmu-mtable .dmu-mrow-c5 {
+  grid-template-columns: minmax(0, 2.4fr) 0.5fr 0.6fr 0.6fr 0.6fr;
+}
+
+
+/* 模型统计二级展开 chevron：展开时旋转 90° */
+.dmu-chev {
+  display: inline-flex;
+  margin-right: 3px;
+  vertical-align: -1px;
+  color: var(--dsw-alias-label-tertiary, #98a2b3);
+  transition: transform 0.15s ease;
+
+  &.open { transform: rotate(90deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dmu-chev { transition: none; }
+}
+
+/* 悬停提示边缘对齐：左端列向左对齐、右端列向右对齐，避免溢出可视范围 */
+.dmu-heat-grid .dmu-heat-cell.dmu-tip-left:hover::after {
+  left: 0;
+  transform: none;
+}
+
+.dmu-heat-grid .dmu-heat-cell.dmu-tip-right:hover::after {
+  left: auto;
+  right: 0;
+  transform: none;
+}
+
+
+/* 会话统计第一列：常规字重；单行显示，超长时按字符截断
+   （text-overflow: ellipsis 即字符级切断，继承基础规则的 nowrap/ellipsis）。
+   选择器强度需压过基础规则 .dmu-mtable .dmu-mrow .dmu-mname（三类） */
+.dmu-mtable.dmu-mtable-convos .dmu-mrow .dmu-mname {
+  font-weight: 400;
+}
+
+/* 模型展开调用行：与上层五列网格对齐，弱化层级但列不错位 */
+.dmu-mcalls {
+  padding: 0 0 6px;
+
+  & .dmu-mrow-call {
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--dsw-alias-label-secondary, #637182);
+  }
+}
+
+/* chevron 固定宽度槽位：无记录行的空占位同样占宽，模型名称对齐 */
+.dmu-chev {
+  width: 10px;
+  flex: none;
+  justify-content: center;
+}
+
+.dmu-chev-empty { visibility: hidden; }
+
+/* 展开调用行首列缩进一个 chevron 槽宽：时间列与模型名文本对齐，从属关系可见 */
+.dmu-mcalls .dmu-mrow-call .dmu-mname {
+  padding-left: 14px;
+}

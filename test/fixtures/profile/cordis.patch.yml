@@ -1,0 +1,16 @@
+providers:
+  kimi1:
+    baseURL: https://api.kimi.com/coding/v1
+    apiKeyEnv: MODEL_USAGE_TEST_KIMI1
+  kimi2:
+    baseURL: https://api.kimi.com/coding
+    apiKeyEnv: MODEL_USAGE_TEST_KIMI2
+  custom-zai:
+    baseURL: https://api.z.ai/api/coding/paas/v4
+    apiKeyEnv: MODEL_USAGE_TEST_ZAI
+  custom-moonshot:
+    baseURL: https://api.moonshot.cn/v1
+    apiKeyEnv: MODEL_USAGE_TEST_MOONSHOT
+  relay:
+    baseURL: https://relay.example/v1
+    apiKeyEnv: MODEL_USAGE_TEST_RELAY

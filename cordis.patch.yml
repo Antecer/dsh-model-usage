@@ -1,0 +1,3 @@
+- insert:
+    - id: model-usage
+      name: '@antecer/dsh-model-usage'

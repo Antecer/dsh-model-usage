@@ -1,0 +1,9 @@
+providers:
+  kimi1:
+    baseURL: https://api.kimi.com/coding
+    apiKeyEnv: MODEL_USAGE_TEST_KIMI1
+  kimi2:
+    baseURL: https://api.kimi.com/coding
+    apiKeyEnv: MODEL_USAGE_TEST_KIMI2
+  zai-coding-cn:
+    apiKeyEnv: MODEL_USAGE_TEST_ZAI

@@ -1,0 +1,43 @@
+{
+  "name": "@antecer/dsh-model-usage",
+  "version": "1.0.0",
+  "description": "DSH Web 插件：实时显示模型供应商的额度与本机用量",
+  "license": "MIT",
+  "author": "Antecer",
+  "type": "module",
+  "files": [
+    "lib",
+    "assets",
+    "cordis.patch.yml",
+    "docs",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "exports": {
+    ".": "./lib/index.mjs",
+    "./client": "./lib/client.js"
+  },
+  "engines": {
+    "dsh": ">=0.2.0-rc.2 <0.3.0"
+  },
+  "dsh": {
+    "manifestVersion": 1,
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-sidebar",
+        "@deepseek-ai/dsh-client-locale"
+      ]
+    }
+  },
+  "devDependencies": {
+    "jsdom": "^30.1.3",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  }
+}

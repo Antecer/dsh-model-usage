@@ -1,0 +1,4 @@
+providers:
+  kimi-coding:
+    baseURL: https://api.kimi.com/coding
+    apiKeyEnv: MODEL_USAGE_TEST_KIMI_WEB
