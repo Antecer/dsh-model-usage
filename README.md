@@ -30,11 +30,36 @@ DSH（DeepSeek Harness）Web 插件：在侧栏底部常驻显示模型供应商
 
 要求 DSH `>= 0.2.0-rc.2 < 0.3.0`。
 
+### 从插件市场安装（推荐）
+
+1. 打开「插件 → 实验性插件 → 更多 → 自定义插件市场」，启用后在「发现」里点「添加索引源」。
+2. 粘贴索引地址：
+
+```
+https://antecer.github.io/dsh-model-usage/index.json
+```
+
+3. 搜索 `Model Usage` 并安装。
+
+### 从 npm 安装
+
+```bash
+dsh plugin --profile <profile> add @antecer/dsh-model-usage
+```
+
+### 从 Git 安装（固定提交）
+
+```bash
+dsh plugin --profile <profile> add "git+https://github.com/Antecer/dsh-model-usage.git#7b7bb641efb184212a593610070ab77c1f70e470"
+```
+
+### 从本地源码安装（开发）
+
 ```bash
 dsh plugin --profile <profile> add link:/path/to/dsh-model-usage
 ```
 
-安装后重启宿主并刷新页面。
+安装后重启宿主并刷新页面。发布、索引维护与社区市场提交见 [docs/publish-market.md](docs/publish-market.md)。
 
 ## 改动生效方式
 
