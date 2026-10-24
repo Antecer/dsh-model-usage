@@ -87,7 +87,13 @@ async function renderPlugin(t, opts = {}) {
 
   const calls = []
   let snapshotCalls = 0
+  const ACTIVE_SNAP = opts.snap || SNAP
   const statsReply = opts.statsReply || { ok: true, value: STATS }
+  const pricingEnvReply = opts.pricingEnv || {
+    rules: { peakDays: [1, 2, 3, 4, 5], peakWindows: [['09:00', '12:00'], ['14:00', '18:00']] },
+    holidays: [], years: [2026], error: null,
+  }
+  const pricingCheckReply = opts.pricingCheck || { checkedAt: Date.now(), ok: true, drift: [] }
   globalThis.fetch = async (url, init) => {
     const body = JSON.parse(init.body)
     calls.push(body)
@@ -98,7 +104,7 @@ async function renderPlugin(t, opts = {}) {
       if (opts.snapshotFailures && snapshotCalls <= opts.snapshotFailures) {
         return { ok: false, status: 503, async json() { return { ok: false, error: { message: 'temporarily unavailable' } } } }
       }
-      return { ok: true, status: 200, async json() { return { ok: true, value: SNAP } } }
+      return { ok: true, status: 200, async json() { return { ok: true, value: ACTIVE_SNAP } } }
     }
     if (body.endpoint === 'stats') return { ok: true, status: 200, async json() { return statsReply } }
     if (body.endpoint === 'current') return { ok: true, status: 200, async json() { return { ok: true, value: { route: null } } } }
@@ -106,6 +112,8 @@ async function renderPlugin(t, opts = {}) {
     if (body.endpoint === 'zcodeAuthState') return { ok: true, status: 200, async json() { return { ok: true, value: { connected: false, source: null, family: null } } } }
     if (body.endpoint === 'zcodeLoginStart') return { ok: true, status: 200, async json() { return { ok: true, value: { url: 'https://bigmodel.cn/login?mock=1', state: 'st-1' } } } }
     if (body.endpoint === 'zcodeLoginComplete') return { ok: true, status: 200, async json() { return { ok: true, value: { connected: true } } } }
+    if (body.endpoint === 'pricingEnv') return { ok: true, status: 200, async json() { return { ok: true, value: pricingEnvReply } } }
+    if (body.endpoint === 'pricingCheck') return { ok: true, status: 200, async json() { return { ok: true, value: pricingCheckReply } } }
     throw new Error('unexpected endpoint ' + body.endpoint)
   }
 
@@ -644,4 +652,137 @@ test('冷启动首次快照失败：有限退避重试，成功后渲染卡片',
   await act(async () => {})
   assert.ok(container.querySelector('.dmu-pcard:not(.dmu-pcard-ghost)'), '重试成功后应渲染真实卡片')
   await unmount()
+})
+
+// ---------------------------------------------------------------- 峰谷提示 / 官方价格校验
+// DeepSeek 官方计费规则：工作日 9:00-12:00、14:00-18:00 为高峰，其余（含周末/节假日全天）为空闲。
+// 侧栏 DeepSeek 卡片底部显示「当前为梁文谷/梁文峰时段，距离…还有 Xh」；官方价格表变动时弹窗提示。
+
+/** 从发布产物的内联实现抽取峰谷计算（单文件交付约束，无独立模块可 import）。 */
+function loadPeakFns() {
+  const src = readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8')
+  const start = src.indexOf('const BJ_OFFSET')
+  const end = src.indexOf('// ---------------------------------------------------------------- 快照首屏', start)
+  assert.ok(start > 0 && end > start, 'client.js 应包含峰谷计算块')
+  return new Function(src.slice(start, end) + '\nreturn { peakInfo, formatPeakLeft }')()
+}
+
+const DEEPSEEK_SNAP = {
+  generatedAt: NOW, refreshSeconds: 60, card: { template: '' },
+  providers: [{
+    route: 'deepseek-official', displayName: 'DeepSeek', adapter: 'deepseek-balance',
+    status: 'ok', valid: true, fetchedAt: NOW,
+    balance: { currency: 'CNY', total: '12.34', granted: '2.00', toppedUp: '10.34' },
+  }],
+}
+
+test('峰谷计算：工作日窗口/午休/晚间/周末/节假日与剩余时间格式', () => {
+  const { peakInfo, formatPeakLeft } = loadPeakFns()
+  const rules = { peakDays: [1, 2, 3, 4, 5], peakWindows: [['09:00', '12:00'], ['14:00', '18:00']] }
+  const none = new Set()
+  const at = (y, mo, d, h, mi) => Date.UTC(y, mo - 1, d, h - 8, mi)
+  // 2026-10-26 周一 10:00 → 高峰，12:00 结束
+  assert.deepEqual(peakInfo(at(2026, 10, 26, 10, 0), rules, none), { peak: true, changeAt: at(2026, 10, 26, 12, 0) })
+  // 周一 12:30（午休）→ 空闲，14:00 转高峰
+  assert.deepEqual(peakInfo(at(2026, 10, 26, 12, 30), rules, none), { peak: false, changeAt: at(2026, 10, 26, 14, 0) })
+  // 周一 18:30 → 空闲，次日 09:00 转高峰
+  assert.deepEqual(peakInfo(at(2026, 10, 26, 18, 30), rules, none), { peak: false, changeAt: at(2026, 10, 27, 9, 0) })
+  // 周五 19:00 → 空闲，下周一 09:00（跳过周末）
+  assert.deepEqual(peakInfo(at(2026, 10, 30, 19, 0), rules, none), { peak: false, changeAt: at(2026, 11, 2, 9, 0) })
+  // 国庆（10-01 周四）全天空闲 → 下一峰 10-08 周四 09:00
+  const holidays = new Set(['2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04', '2026-10-05', '2026-10-06', '2026-10-07'])
+  assert.deepEqual(peakInfo(at(2026, 10, 1, 10, 0), rules, holidays), { peak: false, changeAt: at(2026, 10, 8, 9, 0) })
+  // 剩余时间格式
+  assert.equal(formatPeakLeft(2 * 3600e3), '2h')
+  assert.equal(formatPeakLeft(1.5 * 3600e3), '1h30m')
+  assert.equal(formatPeakLeft(45 * 60e3), '45m')
+})
+
+test('侧栏 DeepSeek 卡片：大数字按峰/谷着色，倒计时并入充值行右对齐', async (t) => {
+  const { container, unmount } = await renderPlugin(t, { snap: DEEPSEEK_SNAP })
+  const { act } = (await import('react')).default
+  await act(async () => { await new Promise((r) => setTimeout(r, 0)) })
+  const big = container.querySelector('.dmu-pcard .dmu-big')
+  assert.ok(big, 'DeepSeek 卡片应渲染中间大数字')
+  assert.match(big.className, /\bdmu-price-(peak|valley)\b/, '大数字应有峰（红）/谷（绿）配色类')
+  const bigText = container.querySelector('.dmu-pcard .dmu-bigtext')
+  assert.ok(bigText, '大数字应有贴合文字的内层悬停区')
+  // 悬停判定只认文字：整行空白处（.dmu-big 容器）不触发
+  await act(async () => {
+    big.dispatchEvent(new window.MouseEvent('mouseover', { bubbles: true, clientX: 320, clientY: 400 }))
+    await new Promise((r) => setTimeout(r, 0))
+  })
+  assert.ok(!container.querySelector('.dmu-peak-tip'), '悬停大数字整行空白处不应显示提示')
+  // 自绘提示：悬停文字时显示在鼠标指针上方，左下角对齐指针
+  await act(async () => {
+    bigText.dispatchEvent(new window.MouseEvent('mouseover', { bubbles: true, clientX: 320, clientY: 400 }))
+    await new Promise((r) => setTimeout(r, 0))
+  })
+  await act(async () => {})
+  const tip = container.querySelector('.dmu-peak-tip')
+  assert.ok(tip, '悬停大数字文字应显示自绘提示')
+  assert.equal(tip.getAttribute('role'), 'tooltip', '提示应有 tooltip 语义')
+  assert.match(text(tip), /^当前时段：梁文(峰|谷)$/, '提示内容为当前时段')
+  assert.equal(tip.style.left, '320px', '提示左下角水平对齐指针')
+  assert.equal(tip.style.top, '394px', '提示显示在指针上方（留 6px 间距）')
+  await act(async () => {
+    bigText.dispatchEvent(new window.MouseEvent('mouseout', { bubbles: true }))
+    await new Promise((r) => setTimeout(r, 0))
+  })
+  assert.ok(!container.querySelector('.dmu-peak-tip'), '鼠标移出文字后提示消失')
+  const row = container.querySelector('.dmu-pcard .dmu-balrow')
+  assert.ok(row, '充值/赠金行应渲染')
+  assert.ok(text(row).includes('充值'), '倒计时应与充值说明在同一行')
+  const count = row.querySelector('.dmu-peak-count')
+  assert.ok(count, '同一行右侧应有倒计时')
+  assert.match(text(count), /^\d+[hm]/, '倒计时只显示时长（如 2h / 1h30m / 45m）')
+  await unmount()
+})
+
+test('非 DeepSeek 供应商卡片不应用峰谷样式', async (t) => {
+  const { container, unmount } = await renderPlugin(t, )
+  assert.ok(container.querySelector('.dmu-pcard'), '应有供应商卡片')
+  assert.equal(container.querySelector('.dmu-price-peak, .dmu-price-valley'), null, 'Kimi/GLM 大数字不应着色')
+  assert.equal(container.querySelector('.dmu-peak-count'), null, 'Kimi/GLM 卡片不应显示倒计时')
+  await unmount()
+})
+
+test('弹窗左列 DeepSeek 卡片同样应用峰谷配色与倒计时', async (t) => {
+  const { container, click, unmount } = await renderPlugin(t, { snap: DEEPSEEK_SNAP })
+  await click(container.querySelector('.dmu-pcard'))
+  const list = document.querySelector('.dmu-overlay .dmu-list')
+  assert.ok(list, '弹窗左列应渲染')
+  const big = list.querySelector('.dmu-pcard .dmu-big')
+  assert.match(big.className, /\bdmu-price-(peak|valley)\b/, '面板列表卡片的大数字也应着色')
+  const count = list.querySelector('.dmu-pcard .dmu-peak-count')
+  assert.ok(count, '面板列表卡片也应显示倒计时')
+  const row = list.querySelector('.dmu-pcard .dmu-balrow')
+  assert.ok(row && row.contains(count), '倒计时与充值说明同一行')
+  await unmount()
+})
+
+test('官方价格变动：弹窗列出差异，关闭后同一差异不再重复弹', async (t) => {
+  const drift = [{ field: 'models.deepseek-flash.output.peak', config: 8, official: 9 }]
+  const reply = { checkedAt: Date.now(), ok: true, drift }
+  const { act } = (await import('react')).default
+  const env1 = await renderPlugin(t, { keepDom: true, pricingCheck: reply })
+  await new Promise((r) => setTimeout(r, 1700)) // pricingCheck 在 mount 1.5s 后请求
+  await act(async () => {})
+  const dialog = document.querySelector('.dmu-dialog')
+  assert.ok(dialog, '价格差异应弹出提示弹窗')
+  assert.ok(text(dialog).includes('官方价格表已变动'), '弹窗标题应为官方价格表已变动')
+  const row = dialog.querySelector('.dmu-drift-row')
+  assert.ok(row && text(row).includes('models.deepseek-flash.output.peak'), '应列出差异字段')
+  const btn = [...dialog.querySelectorAll('button')].find((b) => text(b) === '知道了')
+  assert.ok(btn, '应有「知道了」按钮')
+  await env1.click(btn)
+  assert.ok(!document.querySelector('.dmu-dialog'), '关闭后弹窗消失')
+  await env1.unmount()
+
+  // 同一 localStorage：相同差异不再弹
+  const env2 = await renderPlugin(t, { dom: env1.dom, pricingCheck: reply })
+  await new Promise((r) => setTimeout(r, 1700))
+  await act(async () => {})
+  assert.ok(!document.querySelector('.dmu-dialog'), '相同差异关闭后不再重复提示')
+  await env2.unmount()
 })

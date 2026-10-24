@@ -119,6 +119,80 @@
   50% { opacity: 1; }
 }
 
+/* ---------- 峰谷计费提示（DeepSeek 官方卡片） ---------- */
+/* 大数字配色：高峰红、空闲绿；只在 DeepSeek 卡片上由 JS 加类 */
+.dmu-big.dmu-price-peak {
+  color: var(--dsw-alias-state-error-primary, #f04438);
+}
+
+.dmu-big.dmu-price-valley {
+  color: var(--dsw-alias-state-success-primary, #12b76a);
+}
+
+/* 充值/赠金行：左侧说明 + 右侧峰谷倒计时（同一行右对齐） */
+.dmu-balrow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.dmu-balrow .dmu-baltext {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dmu-balrow .dmu-peak-count {
+  margin-left: auto;
+  flex: none;
+  color: var(--dsw-alias-label-tertiary, #98a2b3);
+  font-size: 11px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* 大数字峰谷提示：自绘气泡（与热力图同款配色），fixed 定位在指针上方、左下角对齐指针 */
+.dmu-peak-tip {
+  position: fixed;
+  z-index: 1000;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--dsw-alias-label-primary, #191f28);
+  color: var(--dsw-alias-label-on-color, #fff);
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translateY(-100%);
+}
+
+/* ---------- 官方价格漂移弹窗 ---------- */
+.dmu-drift {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 10px 0;
+  max-height: 240px;
+  overflow: auto;
+}
+
+.dmu-drift-head,
+.dmu-drift-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+  font-size: 12px;
+}
+
+.dmu-drift-head { color: var(--dsw-alias-label-tertiary, #98a2b3); }
+.dmu-drift-row { color: var(--dsw-alias-label-primary, #191f28); }
+.dmu-drift-row .f { word-break: break-all; font-family: var(--ds-font-family-code, ui-monospace, monospace); }
+.dmu-drift-row .c { color: var(--dsw-alias-label-secondary, #6b7480); }
+.dmu-drift-row .o { color: var(--dsw-alias-state-business-primary, #4176e6); }
+
 /* ---------- 左下角账号菜单联动 ---------- */
 /* 账号菜单向上弹出时覆盖本卡片：菜单打开期间隐藏卡片，关闭后自动恢复。
    用 visibility（而非 display）保留占位，避免侧栏底部布局收缩导致菜单与触发按钮错位。 */
@@ -231,6 +305,13 @@
     margin-left: 3px;
     color: var(--dsw-alias-label-secondary, #637182);
   }
+}
+
+/* 大数字文字内层：inline-flex 宽度贴合内容，悬停判定只认文字本身（整行空白不触发 tooltip） */
+.dmu-bigtext {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
 }
 
 /* 图标按钮（刷新） */
