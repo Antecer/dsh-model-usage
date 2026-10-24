@@ -76,6 +76,24 @@ test('自定义 Kimi 路由无需 credentials/adapters 配置，各自复用 pro
   assert.ok(!JSON.stringify(snapshot).includes('test-account'))
 })
 
+test('Kimi 周窗口：used=0 时接口省略 used 字段，仍应显示 0% 周窗口', async (t) => {
+  // 实测 Kimi 在周用量为 0 时只返回 limit/remaining/resetTime（没有 used）；
+  // 旧逻辑要求 used != null 才渲染，导致「周」整行消失、看起来像没有周额度。
+  const reply = {
+    usage: { limit: 100, remaining: 100, resetTime: '2026-10-31T05:31:12.713215Z' },
+    limits: [{ window: { duration: 300, timeUnit: 'TIME_UNIT_MINUTE' }, detail: { limit: 100, remaining: 100, resetTime: '2026-10-24T09:31:12.713215Z' } }],
+  }
+  fixture(t, reply)
+  const host = harness({ adapters: { kimi1: 'kimi-coding' } }, ['kimi1'], { MODEL_USAGE_TEST_KIMI1: 'test-key' })
+  const snapshot = await host.snapshot()
+  const p = snapshot.providers[0]
+  assert.equal(p.status, 'ok')
+  const weekly = p.windows.find((w) => w.key === 'weekly')
+  assert.ok(weekly, '未使用时也应显示周窗口')
+  assert.equal(weekly.usedPct, 0, '未使用应为 0%')
+  assert.ok(p.windows.find((w) => w.key === 'rolling'), '5h 滚动窗口也应显示')
+})
+
 test('显式 adapters 仅选查询模板，不必重复指定 provider 凭据', async (t) => {
   const requests = fixture(t)
   const host = harness({ adapters: { kimi1: 'kimi-coding' } }, ['kimi1'], { MODEL_USAGE_TEST_KIMI1: 'test-own-key' })
