@@ -95,6 +95,7 @@ async function renderPlugin(t, opts = {}) {
   }
   const pricingCheckReply = opts.pricingCheck || { checkedAt: Date.now(), ok: true, drift: [] }
   const updateReply = opts.update || { current: '1.0.0', latest: null, hasUpdate: false, autoUpdatable: false }
+  const updateCachedReply = opts.updateCached || updateReply
   globalThis.fetch = async (url, init) => {
     const body = JSON.parse(init.body)
     calls.push(body)
@@ -115,7 +116,10 @@ async function renderPlugin(t, opts = {}) {
     if (body.endpoint === 'zcodeLoginComplete') return { ok: true, status: 200, async json() { return { ok: true, value: { connected: true } } } }
     if (body.endpoint === 'pricingEnv') return { ok: true, status: 200, async json() { return { ok: true, value: pricingEnvReply } } }
     if (body.endpoint === 'pricingCheck') return { ok: true, status: 200, async json() { return { ok: true, value: pricingCheckReply } } }
-    if (body.endpoint === 'versionCheck') return { ok: true, status: 200, async json() { return { ok: true, value: updateReply } } }
+    if (body.endpoint === 'versionCheck') {
+      const reply = body.payload && body.payload.force ? updateReply : updateCachedReply
+      return { ok: true, status: 200, async json() { return { ok: true, value: reply } } }
+    }
     if (body.endpoint === 'updatePlugin') return { ok: true, status: 200, async json() { return { ok: true, value: { scheduled: true } } } }
     throw new Error('unexpected endpoint ' + body.endpoint)
   }
@@ -502,6 +506,20 @@ test('弹窗头部：可自动更新时点击标签调用更新接口并显示�
   await click(tag)
   assert.ok(calls.some((c) => c.endpoint === 'updatePlugin'), '点击应调用 updatePlugin 接口')
   assert.equal(text(document.querySelector('.dmu-update-tag')), '更新中…', '更新期间标签应显示更新中')
+  await unmount()
+})
+
+test('弹窗头部：SWR——缓存无更新时后台强刷发现新版本并显示标签', async (t) => {
+  const { container, click, calls, unmount } = await renderPlugin(t, {
+    updateCached: { current: '1.0.0', latest: '1.0.0', hasUpdate: false, autoUpdatable: false },
+    update: { current: '1.0.0', latest: '1.0.1', hasUpdate: true, autoUpdatable: true },
+  })
+  await click(container.querySelector('.dmu-pcard'))
+  const tag = document.querySelector('.dmu-update-tag')
+  assert.ok(tag, '后台强刷结果到达后应显示更新时间标签')
+  assert.equal(text(tag), 'NEW v1.0.1', '标签内容应为强刷发现的新版本')
+  assert.ok(calls.some((c) => c.endpoint === 'versionCheck' && c.payload && c.payload.force === true), '应发起后台强制刷新')
+  assert.ok(calls.some((c) => c.endpoint === 'versionCheck' && !(c.payload && c.payload.force)), '应先用缓存查询')
   await unmount()
 })
 
