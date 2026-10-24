@@ -1,6 +1,6 @@
 {
   "name": "@antecer/dsh-model-usage",
-  "version": "1.0.4",
+  "version": "1.2.0",
   "description": "DSH Web 插件：实时显示模型供应商的额度与本机用量",
   "license": "MIT",
   "author": "Antecer",

@@ -55,19 +55,47 @@ gh repo edit Antecer/dsh-model-usage --add-topic dsh-plugin
 
 ## 四、维护索引
 
-`site/index.json` 的格式是官方 format 1，字段含义见官方文档。发新版本时：
+市场索引 `site/index.json` 的格式是官方 format 1，字段含义见官方文档。
 
-- 在 `plugins[0].versions` 里**追加**新版本条目，保留旧版本；版本顺序由 DSH 按 SemVer 自动排序。
-- `publishTimestamp` 用发布时间的 Unix 秒（`date +%s`）。
-- `engines.dsh` 与该版本包的 `engines.dsh` 一致。
-- npm 发布后把 `source` 从 git 固定提交改成 npm：
+**`site/index.json` 不再入库**（已加入 `.gitignore`），完全由构建脚本在部署产物中生成；仓库里只需要维护两样东西：
 
-```json
-"source": { "type": "npm" }
+- `scripts/market-meta.mjs`：与版本无关的展示元数据（市场标题/描述、插件标题/描述/图标/作者/homepage/repository、engines 兜底）
+- git tag：每个已发布版本一个 `v<版本>` tag（CI 在发版时自动创建）
+
+Pages 部署工作流在部署前自动：
+
+1. 若 `package.json` 的版本还没有对应的 `v<版本>` tag，自动创建并推送该 tag；
+2. 运行 `scripts/build-index.mjs`：静态字段取自 `scripts/market-meta.mjs`，版本条目从各 tag 读取（版本号取该 tag 的 `package.json`、commit 取 tag 提交、发布时间取 tag 提交时间、engines 取该 tag 的 `package.json`），按 SemVer 从新到旧排序，**生成** `site/index.json`；
+3. 以生成后的 `site/` 作为部署产物上传到 GitHub Pages（**不产生任何提交**，主分支保持干净，本地无需 pull）。
+
+因此日常发版只需：
+
+```bash
+# 1. 改 package.json 的 version 与 CHANGELOG.md
+# 2. 提交并推送
+git add -A && git commit -m "chore: 发布 x.y.z" && git push
 ```
 
-- 索引当前用 git 源固定提交 `d90145b…`（发布提交）；之后每次发布都要用 `git rev-parse HEAD` 更新 `source.commit`，否则市场安装到的是旧提交。npm 发布后改用 npm 源即可不再维护 commit。
-- 新增插件时把图标放到 `site/icons/`，索引里写相对路径 `icons/<name>.svg`。
+**部署记录清理（可选）：** 每次部署都会在 GitHub Deployments 留下一条 `github-pages` 记录；workflow 在部署成功后会自动删除除最新一条以外的历史记录。删除 deployment 需要仓库 admin 权限，而 `GITHUB_TOKEN` 不具备，因此需配置一个 secret：
+
+1. 创建 fine-grained PAT（Settings → Developer settings → Fine-grained tokens），仓库仅选本仓库，权限：**Administration: Read and write**、**Deployments: Read and write**、**Contents: Read**；
+   - 注意：GitHub 规定「仓库存在多个 deployment 时只能删除 inactive 的」，因此脚本会先给旧记录补一个 `inactive` 状态再触发删除；
+2. 仓库 Settings → Secrets and variables → Actions → New repository secret，名称 `DEPLOY_CLEANUP_TOKEN`；
+3. 未配置时清理步骤会静默跳过（仅记录 notice），已上线的站点不受影响。
+
+**严格发版门禁：只有版本号变化才会部署。** 工作流触发后先比较 `package.json` 版本与 `v<版本>` tag：
+
+- **tag 不存在 = 新版本** → 打 tag、生成索引、部署
+- **tag 已存在 = 版本未变** → 跳过部署（只改 `site/**` 元数据不会触发线上更新）
+- 需要只更新市场元数据（描述、图标、新增插件）而不发版时，到仓库 **Actions → Deploy plugin market → Run workflow** 手动触发（`workflow_dispatch` 会绕过门禁强制执行一次）
+
+因此版本未变时推送不会重复部署；要发布新代码必须升版本号。其余约定：
+
+- `publishTimestamp` 取该版本 tag 首次出现的提交时间；`engines.dsh` 与该 tag 的 `package.json` 一致。
+- 索引的 git 源必须写**小写 40 位 commit SHA**（官方 schema 校验），不能写 tag/分支名；tag 只是用来让 CI 找到 commit。
+- 若之后改为发布 npm 包，把 `scripts/build-index.mjs` 生成的 `source` 改成 `{ "type": "npm" }` 即可（仍需改脚本）；npm 源同样支持自动生成。
+- 新增插件时把图标放到 `site/icons/`，在 `scripts/market-meta.mjs` 的 `plugins` 里加一条（图标写相对路径 `icons/<name>.svg`）。
+- 需要补历史版本时，给对应提交打 `v<版本>` tag 并推送，下次部署会自动出现在索引里；本地可用 `node scripts/build-index.mjs` 预览生成的 `site/index.json`（该文件被忽略，不会进入提交）。
 
 ## 五、提交社区市场（非官方，但能被搜到）
 
@@ -133,6 +161,6 @@ MIT
 - [ ] `npm publish --access public` 成功，`npm view` 能查到版本。
 - [ ] 仓库 topics 含 `dsh-plugin`。
 - [ ] GitHub Pages 已启用，`index.json` 返回 200。
-- [ ] `site/index.json` 的 `source` 与版本正确（npm，或 git 固定 40 位提交）。
+- [ ] 部署工作流成功：已自动创建 `v<版本>` tag，且 `index.json` 的 `source` 指向该 tag 的提交（npm，或 git 固定 40 位提交）。
 - [ ] 在 DSH「发现」中添加索引后能搜索并安装。
 - [ ] 已提交 dsh.so / dsh-plugin.org。

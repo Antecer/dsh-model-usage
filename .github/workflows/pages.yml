@@ -3,16 +3,20 @@ name: Deploy plugin market
 on:
   push:
     branches: [main]
-    # 只有站点内容或工作流本身变化时才部署，普通代码/文档提交不触发
+    # 命中这些路径只代表"可能需要部署"：是否真的部署由下面的版本门禁决定
     paths:
       - 'site/**'
+      - 'package.json'
+      - 'scripts/build-index.mjs'
       - '.github/workflows/pages.yml'
+  # 手动触发：用于只更新市场元数据（site/**）而不发新版本时强制部署
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
+  deployments: write   # 清理历史部署记录
 
 concurrency:
   group: pages
@@ -25,12 +29,36 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0   # build-index 需要读取 tag 与历史提交
+          fetch-tags: true
+      # 严格发版门禁：只有 v<package.json.version> tag 不存在（= 新版本）才部署。
+      # 版本未变时（如只改 site/** 元数据或脚本），自动跳过，避免无意义的重复部署；
+      # 需要单独上线市场元数据时，在 Actions 里手动 Run workflow。
+      - name: 发版门禁（版本未变则跳过部署）
+        id: gate
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::手动触发，强制执行部署"
+            exit 0
+          fi
+          version=$(node -p "require('./package.json').version")
+          if git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::版本 v$version 的 tag 已存在（本次未改版本号），跳过部署。如需单独更新市场元数据（site/**），请在 Actions 中手动 Run workflow。"
+          else
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::检测到新版本 v$version，开始部署"
+          fi
       - name: 校验站点内容
-        run: test -f site/index.json
+        if: steps.gate.outputs.deploy == 'true'
+        run: test -f scripts/build-index.mjs && test -d site/icons
       # Pages 未启用时 configure-pages 会报 "Get Pages site failed ... Not Found"；
       # 这里先查一次 Pages API，给出明确的启用指引，避免只看到含义模糊的 404。
       - name: 确认 GitHub Pages 已启用
+        if: steps.gate.outputs.deploy == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -45,9 +73,73 @@ jobs:
           if [ "$status" != "200" ]; then
             echo "::warning::无法确认 Pages 状态（HTTP $status），继续尝试部署。"
           fi
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+      - name: 自动打版本 tag（缺失时）
+        if: steps.gate.outputs.deploy == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(node -p "require('./package.json').version")
+          tag="v$version"
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "tag $tag 已存在，跳过"
+          else
+            git config user.name "dsh-market-bot"
+            git config user.email "dsh-market-bot@users.noreply.github.com"
+            git tag "$tag"
+            git push origin "refs/tags/$tag"
+            echo "已创建并推送 tag $tag"
+          fi
+      - name: 生成市场索引（从 tag 与 package.json 版本，仅在部署产物中）
+        if: steps.gate.outputs.deploy == 'true'
+        run: node scripts/build-index.mjs
+      - uses: actions/configure-pages@v6
+        if: steps.gate.outputs.deploy == 'true'
+      - uses: actions/upload-pages-artifact@v5
+        if: steps.gate.outputs.deploy == 'true'
         with:
           path: site
       - id: deployment
-        uses: actions/deploy-pages@v4
+        if: steps.gate.outputs.deploy == 'true'
+        uses: actions/deploy-pages@v5
+      # GitHub Pages 每次部署都会在 Deployments 里留下一条记录（environment: github-pages）；
+      # 这里删除除最新一条之外的历史记录，保持部署页面清爽（不影响已上线的站点本身）。
+      - name: 清理历史部署记录（只保留最新一条）
+        if: steps.gate.outputs.deploy == 'true'
+        env:
+          # GITHUB_TOKEN 没有删除 deployments 所需的仓库 admin 权限；配置
+          # DEPLOY_CLEANUP_TOKEN（仓库 admin 的 fine-grained PAT：Administration 与
+          # Deployments 读写）后自动清理，未配置时回退并静默跳过（只记录 notice）。
+          GH_TOKEN: ${{ secrets.DEPLOY_CLEANUP_TOKEN != '' && secrets.DEPLOY_CLEANUP_TOKEN || github.token }}
+        run: |
+          resp=$(curl -s -w '\n%{http_code}' -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/deployments?environment=github-pages&per_page=100")
+          code=$(printf '%s' "$resp" | tail -n1)
+          body=$(printf '%s' "$resp" | sed '$d')
+          if [ "$code" != "200" ]; then
+            echo "::notice::读取部署记录失败（HTTP $code）；配置 DEPLOY_CLEANUP_TOKEN secret（仓库 admin 的 PAT）后可自动清理"
+            exit 0
+          fi
+          ids=$(printf '%s' "$body" | jq -r 'sort_by(.id) | reverse | .[1:] | .[].id')
+          if [ -z "$ids" ]; then
+            echo "没有需要清理的历史部署记录"
+            exit 0
+          fi
+          for id in $ids; do
+            # GitHub 规定多个 deployment 时只能删除 inactive 的：先补一个 inactive 状态再删
+            mark=$(curl -s -o /dev/null -w '%{http_code}' -X POST \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              -H "Content-Type: application/json" \
+              -d '{"state":"inactive"}' \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/deployments/$id/statuses")
+            code=$(curl -s -o /dev/null -w '%{http_code}' -X DELETE \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/deployments/$id")
+            if [ "$code" = "204" ]; then
+              echo "已删除历史部署记录 $id（inactive 标记 HTTP $mark）"
+            else
+              echo "::notice::删除部署记录 $id 失败（HTTP $code，inactive 标记 HTTP $mark）；需要具备仓库 admin 权限的 DEPLOY_CLEANUP_TOKEN"
+            fi
+          done
