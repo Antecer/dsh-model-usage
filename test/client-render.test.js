@@ -447,7 +447,7 @@ test('弹窗不再有总览按钮与卡片切换；全部刷新逐路由触发',
   await unmount()
 })
 
-test('弹窗头部：检测到新版本时在 GitHub 按钮左侧显示 NEW 标签', async (t) => {
+test('弹窗头部：检测到新版本时在 GitHub 按钮左侧显示 NEW 标签（悬停自绘提示）', async (t) => {
   const { container, click, unmount } = await renderPlugin(t, {
     update: { current: '1.0.0', latest: '1.0.1', hasUpdate: true },
   })
@@ -457,10 +457,18 @@ test('弹窗头部：检测到新版本时在 GitHub 按钮左侧显示 NEW 标�
   const tag = head.querySelector('.dmu-update-tag')
   assert.ok(tag, '有新版本时应显示更新标签')
   assert.equal(text(tag), 'NEW v1.0.1', '标签内容为 NEW + 最新版本号')
-  assert.ok(String(tag.getAttribute('title')).includes('1.0.1'), '悬停提示应包含新版本号')
+  assert.equal(tag.getAttribute('title'), null, '不应使用原生 title 提示（会被指针遮挡）')
   const children = [...head.children]
   const gh = children.find((el) => el.getAttribute('title') === 'GitHub')
   assert.ok(gh && children.indexOf(tag) < children.indexOf(gh), '标签应位于 GitHub 按钮左侧')
+  // 悬停渲染自绘气泡（与热力图同款），离开消失
+  const { act } = (await import('react')).default
+  await act(async () => { tag.dispatchEvent(new window.MouseEvent('mouseover', { bubbles: true })) })
+  const tip = document.querySelector('.dmu-peak-tip')
+  assert.ok(tip, '悬停标签应渲染自绘提示')
+  assert.ok(text(tip).includes('1.0.1'), '提示应包含新版本号')
+  await act(async () => { tag.dispatchEvent(new window.MouseEvent('mouseout', { bubbles: true })) })
+  assert.ok(!document.querySelector('.dmu-peak-tip'), '离开后提示应消失')
   await unmount()
 })
 
@@ -487,7 +495,10 @@ test('弹窗头部：可自动更新时点击标签调用更新接口并显示�
   await click(container.querySelector('.dmu-pcard'))
   const tag = document.querySelector('.dmu-update-tag')
   assert.ok(tag, '应显示更新标签')
-  assert.ok(String(tag.getAttribute('title')).includes('立即更新'), '可自动更新时提示文案应表明立即更新')
+  const { act } = (await import('react')).default
+  await act(async () => { tag.dispatchEvent(new window.MouseEvent('mouseover', { bubbles: true })) })
+  const tip = document.querySelector('.dmu-peak-tip')
+  assert.ok(tip && text(tip).includes('立即更新'), '可自动更新时悬停提示应表明立即更新')
   await click(tag)
   assert.ok(calls.some((c) => c.endpoint === 'updatePlugin'), '点击应调用 updatePlugin 接口')
   assert.equal(text(document.querySelector('.dmu-update-tag')), '更新中…', '更新期间标签应显示更新中')
