@@ -27,6 +27,18 @@
       },
       "versions": [
         {
+          "version": "1.0.1",
+          "publishTimestamp": 1792829290,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/Antecer/dsh-model-usage",
+            "commit": "8f85fe8015d78dc021643eae159a4e4aae6340ad"
+          },
+          "engines": {
+            "dsh": ">=0.2.0-rc.2 <0.3.0"
+          }
+        },
+        {
           "version": "1.0.0",
           "publishTimestamp": 1792752245,
           "source": {

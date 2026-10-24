@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.1（2026-10-24）
+
+- 版本号更新至 1.0.1（采用 SemVer 规范三段式；"1.01" 的 minor 段含前导零，不符合 SemVer，npm 发布与市场排序都会出问题）
+- 市场索引 `site/index.json` 追加 1.0.1 条目（source 固定到版本号提交 8f85fe8），保留 1.0.0 条目
+
 ## 1.0.0（2026-10-23）
 
 - 修复 Kimi 账号（如「Kimi 公账 2」）在周用量为 0 时「周」窗口整行消失：Kimi 接口在 used=0 时会省略 used 字段、只返回 limit/remaining，适配器改为按 limit - remaining 推算（缺省 0），周窗口恢复显示 0%
