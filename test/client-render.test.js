@@ -786,3 +786,17 @@ test('官方价格变动：弹窗列出差异，关闭后同一差异不再重�
   assert.ok(!document.querySelector('.dmu-dialog'), '相同差异关闭后不再重复提示')
   await env2.unmount()
 })
+
+test('弹窗左列：全部刷新按钮固定在滚动区外，卡片列表单独滚动', async (t) => {
+  const { container, click, unmount } = await renderPlugin(t, )
+  await click(container.querySelector('.dmu-pcard'))
+  const list = document.querySelector('.dmu-overlay .dmu-list')
+  assert.ok(list, '弹窗左列应渲染')
+  const first = list.firstElementChild
+  assert.ok(first && first.classList.contains('dmu-toolbar'), '左列第一个子元素应是全部刷新工具栏（固定在滚动区外）')
+  const scroll = list.querySelector('.dmu-list-scroll')
+  assert.ok(scroll, '卡片列表应有独立滚动区')
+  assert.ok(!scroll.contains(first), '工具栏不应包含在滚动区内')
+  assert.ok(scroll.querySelector('.dmu-pcard'), '供应商卡片应在滚动区内')
+  await unmount()
+})

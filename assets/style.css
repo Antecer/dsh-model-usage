@@ -472,7 +472,17 @@
   }
 }
 
-/* ---------- 左列：供应商列表 ---------- */
+/* 左列滚动区：工具栏固定在滚动区外，只有卡片列表滚动 */
+.dmu-list-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* ---------- 左列容器：工具栏固定 + 供应商列表滚动 ---------- */
 .dmu-list {
   display: flex;
   flex-direction: column;
@@ -481,7 +491,8 @@
   flex: none;
   padding: 10px;
   border-right: 1px solid var(--dsw-alias-border-l1, #eceff3);
-  overflow-y: auto;
+  /* 左列本身不滚动：工具栏固定，卡片列表由内部 .dmu-list-scroll 滚动 */
+  overflow: hidden;
 
   & .dmu-list-item {
     display: flex;
