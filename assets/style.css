@@ -67,6 +67,14 @@
   }
 }
 
+/* ---------- 左下角账号菜单联动 ---------- */
+/* 账号菜单向上弹出时覆盖本卡片：菜单打开期间隐藏卡片，关闭后自动恢复。
+   用 visibility（而非 display）保留占位，避免侧栏底部布局收缩导致菜单与触发按钮错位。 */
+.dmu-footwrap[data-account-menu-open],
+.dmu-foot[data-account-menu-open] {
+  visibility: hidden;
+}
+
 /* ---------- 供应商卡片（侧栏与弹窗左列共用，旧版规格） ---------- */
 .dmu-pcard {
   position: relative; /* 账户图标绝对定位锚点 */

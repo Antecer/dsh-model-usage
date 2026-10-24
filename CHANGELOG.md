@@ -2,6 +2,8 @@
 
 ## 1.0.0（2026-10-23）
 
+- 左下角账号菜单（侧栏底部的用户菜单）弹出时自动隐藏供应商卡片、菜单关闭后恢复显示：跟随账号按钮的 aria-expanded 状态（MutationObserver，不轮询），避免向上弹出的菜单被卡片遮挡；隐藏用 visibility 保留占位，避免侧栏底部布局收缩导致菜单与触发按钮错位
+
 - 发布 1.0.0：补充 `package.json` 发布元数据（repository / homepage / bugs / keywords）与插件图标 `assets/icon.svg`；新增 format 1 市场索引 `site/index.json`、索引图标与 GitHub Pages 部署工作流；README 安装说明改为「插件市场 / npm / Git / 本地源码」四种方式；发布、索引维护与社区市场提交步骤见 `docs/publish-market.md`
 
 - 修复新建对话左下角卡片不跟随 DSH 默认模型的真正根因：`agentDefaultModel` 是 **Host 侧**服务，浏览器插件 `ctx.get` 永远取不到（此前两次「修复」实际从未生效，测试桩伪造了该服务）；改为读取浏览器侧 `modelDirectories` 服务的模型目录 `default`——与输入框原生模型选择器同源，目录晚就绪、默认模型变更、无当前会话 id 的新建对话首页都会自动跟随，无需点模型或发消息

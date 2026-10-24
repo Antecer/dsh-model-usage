@@ -133,7 +133,7 @@ async function renderPlugin(t, opts = {}) {
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
-  await act(async () => { root.render(React.createElement(slotComponent, { ...slotProps, wide: true })) })
+  await act(async () => { root.render(React.createElement(slotComponent, { ...slotProps, wide: opts.wide !== false })) })
   await act(async () => {}) // 冲刷 snapshot/stats 的微任务与二次渲染
 
   const click = async (el) => {
@@ -512,4 +512,71 @@ test('账户对话框：未连接状态提供去授权入口', async (t) => {
   const textarea = dialog.querySelector('textarea')
   assert.ok(textarea, '应有回调链接输入框')
   await unmount()
+})
+
+// ---------------------------------------------------------------- 左下角账号菜单联动
+// DSH 侧栏左下角账号菜单（settings.launcher）向上弹出时会覆盖本插件的供应商卡片。
+// trigger 的 aria-expanded 即菜单开合；插件应在打开期间隐藏卡片、关闭后恢复。
+
+/** 模拟 DSH 侧栏左下角的账号菜单 trigger（与宿主 DOM 契约一致：data-signed-out + aria-haspopup + aria-expanded）。 */
+function mockAccountMenuTrigger() {
+  const trigger = document.createElement('button')
+  trigger.setAttribute('aria-haspopup', 'menu')
+  trigger.setAttribute('data-signed-out', 'false')
+  trigger.setAttribute('aria-expanded', 'false')
+  document.body.appendChild(trigger)
+  return {
+    element: trigger,
+    /** 切换菜单开合并冲刷 MutationObserver + React 更新 */
+    async set(open, act) {
+      await act(async () => {
+        trigger.setAttribute('aria-expanded', open ? 'true' : 'false')
+        await new Promise((r) => setTimeout(r, 0))
+      })
+    },
+    remove: () => trigger.remove(),
+  }
+}
+
+test('左下角账号菜单弹出时隐藏侧栏卡片，关闭后恢复（宽态）', async (t) => {
+  const { container, unmount } = await renderPlugin(t, )
+  const { act } = (await import('react')).default
+  const card = () => container.querySelector('.dmu-footwrap')
+  assert.ok(card(), '侧栏应渲染供应商卡片')
+  assert.ok(!card().hasAttribute('data-account-menu-open'), '菜单未打开时卡片应可见')
+
+  const menu = mockAccountMenuTrigger()
+  await act(async () => { await new Promise((r) => setTimeout(r, 0)) })
+  assert.ok(!card().hasAttribute('data-account-menu-open'), 'trigger 存在但菜单关闭时卡片仍应可见')
+
+  await menu.set(true, act)
+  assert.ok(card().hasAttribute('data-account-menu-open'), '账号菜单打开时卡片应标记隐藏')
+
+  await menu.set(false, act)
+  assert.ok(!card().hasAttribute('data-account-menu-open'), '账号菜单关闭后卡片应恢复显示')
+  menu.remove()
+  await unmount()
+})
+
+test('折叠态左下角账号菜单弹出时隐藏紧凑卡片', async (t) => {
+  const { container, unmount } = await renderPlugin(t, { wide: false })
+  const { act } = (await import('react')).default
+  const compact = () => container.querySelector('.dmu-foot.dmu-foot-compact')
+  assert.ok(compact(), '折叠态应渲染紧凑卡片按钮')
+
+  const menu = mockAccountMenuTrigger()
+  await menu.set(true, act)
+  assert.ok(compact().hasAttribute('data-account-menu-open'), '折叠态账号菜单打开时紧凑卡片也应隐藏')
+  await menu.set(false, act)
+  assert.ok(!compact().hasAttribute('data-account-menu-open'), '折叠态菜单关闭后紧凑卡片应恢复')
+  menu.remove()
+  await unmount()
+})
+
+test('菜单打开隐藏卡片用 visibility 保留占位（避免菜单与触发按钮错位）', () => {
+  const css = readFileSync(new URL('../assets/style.css', import.meta.url), 'utf8')
+  const rule = css.match(/\.dmu-footwrap\[data-account-menu-open\][\s\S]{0,240}?\}/)
+  assert.ok(rule, 'style.css 应包含菜单打开时隐藏卡片的规则')
+  assert.ok(/visibility:\s*hidden/.test(rule[0]), '应使用 visibility: hidden 保留布局占位')
+  assert.ok(!/display:\s*none/.test(rule[0]), '不应使用 display: none：侧栏底部收缩会使菜单与触发按钮错位')
 })
