@@ -2,6 +2,8 @@
 
 ## 1.0.0（2026-10-23）
 
+- 修复 GitHub Pages 部署工作流首次运行失败：仓库尚未启用 Pages 时 `actions/configure-pages@v5` 报 `Get Pages site failed ... Not Found`（Pages 站点不存在，并非工作流配置错误）；工作流新增部署前的 Pages 启用检查与中文启用指引、站点内容校验，并把 push 触发收窄为仅 `site/**` 与工作流自身变化，普通代码/文档提交不再触发部署
+
 - 左下角账号菜单（侧栏底部的用户菜单）弹出时自动隐藏供应商卡片、菜单关闭后恢复显示：跟随账号按钮的 aria-expanded 状态（MutationObserver，不轮询），避免向上弹出的菜单被卡片遮挡；隐藏用 visibility 保留占位，避免侧栏底部布局收缩导致菜单与触发按钮错位
 
 - 发布 1.0.0：补充 `package.json` 发布元数据（repository / homepage / bugs / keywords）与插件图标 `assets/icon.svg`；新增 format 1 市场索引 `site/index.json`、索引图标与 GitHub Pages 部署工作流；README 安装说明改为「插件市场 / npm / Git / 本地源码」四种方式；发布、索引维护与社区市场提交步骤见 `docs/publish-market.md`

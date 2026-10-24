@@ -3,6 +3,10 @@ name: Deploy plugin market
 on:
   push:
     branches: [main]
+    # 只有站点内容或工作流本身变化时才部署，普通代码/文档提交不触发
+    paths:
+      - 'site/**'
+      - '.github/workflows/pages.yml'
   workflow_dispatch:
 
 permissions:
@@ -22,6 +26,25 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - name: 校验站点内容
+        run: test -f site/index.json
+      # Pages 未启用时 configure-pages 会报 "Get Pages site failed ... Not Found"；
+      # 这里先查一次 Pages API，给出明确的启用指引，避免只看到含义模糊的 404。
+      - name: 确认 GitHub Pages 已启用
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          status=$(curl -s -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/pages")
+          if [ "$status" = "404" ]; then
+            echo "::error title=GitHub Pages 未启用::仓库尚未启用 GitHub Pages，configure-pages 会报 Get Pages site failed。请在仓库 Settings → Pages → Build and deployment 把 Source 设为 GitHub Actions，然后重新运行本工作流（见 docs/publish-market.md 第三节）。"
+            exit 1
+          fi
+          if [ "$status" != "200" ]; then
+            echo "::warning::无法确认 Pages 状态（HTTP $status），继续尝试部署。"
+          fi
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

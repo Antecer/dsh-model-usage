@@ -40,8 +40,12 @@ gh repo edit Antecer/dsh-model-usage --add-topic dsh-plugin
 
 1. 打开仓库 Settings → Pages → Build and deployment。
 2. Source 选择 **GitHub Actions**。
-3. 等 Actions 里的 `Deploy plugin market` 跑完（或手动 Run workflow）。
-4. 确认索引可访问：https://antecer.github.io/dsh-model-usage/index.json 返回 200 且为 JSON。
+3. 注意：**必须先启用 Pages 再触发部署**。若尚未启用就推送了 `site/` 变更，`Deploy plugin market` 会在
+   `actions/configure-pages@v5` 步骤失败并报 `Get Pages site failed ... Not Found`——这是 Pages 站点不存在
+   （未启用）导致的，不是工作流配置错误；工作流已内置启用检查，会直接给出启用指引。启用后手动 Run workflow
+   即可补部署。
+4. 等 Actions 里的 `Deploy plugin market` 跑完（或手动 Run workflow）。
+5. 确认索引可访问：https://antecer.github.io/dsh-model-usage/index.json 返回 200 且为 JSON。
 
 在 DSH 里验证：
 
