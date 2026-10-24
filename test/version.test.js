@@ -44,14 +44,31 @@ test('compareVersions：按主/次/修订数字比较，非法输入视为相等
   assert.equal(compareVersions(null, '1.0.0'), 0)
 })
 
-test('版本检查：市场索引版本更高时报有更新', async (t) => {
+test('版本检查：市场索引版本更高时报有更新，并给出 npm 安装 spec', async (t) => {
   const next = bump(LOCAL)
   const latest = { plugins: [{ name: '@antecer/dsh-model-usage', versions: [{ version: LOCAL }, { version: next }] }] }
   const calls = mockFetch(t, (url) => (url.includes('index.json') ? latest : { version: LOCAL }))
   const svc = createVersionService(ROOT)
   const r = await svc.check()
-  assert.deepEqual(r, { current: LOCAL, latest: next, hasUpdate: true })
+  assert.deepEqual(r, { current: LOCAL, latest: next, hasUpdate: true, spec: '@antecer/dsh-model-usage@' + next })
   assert.equal(calls.length, 2, '应同时查询市场索引与 npm')
+})
+
+test('版本检查：市场 git 来源转换为固定 commit 的 github 安装 spec', async (t) => {
+  const next = bump(LOCAL)
+  const commit = 'a'.repeat(40)
+  const latest = {
+    plugins: [{
+      name: '@antecer/dsh-model-usage',
+      versions: [{
+        version: next,
+        source: { type: 'git', url: 'https://github.com/Antecer/dsh-model-usage', commit },
+      }],
+    }],
+  }
+  mockFetch(t, (url) => (url.includes('index.json') ? latest : { version: '0.0.1' }))
+  const r = await createVersionService(ROOT).check()
+  assert.equal(r.spec, 'github:Antecer/dsh-model-usage#' + commit)
 })
 
 test('版本检查：npm 版本更高时取 npm 最新', async (t) => {
@@ -60,6 +77,7 @@ test('版本检查：npm 版本更高时取 npm 最新', async (t) => {
   const r = await createVersionService(ROOT).check()
   assert.equal(r.latest, next)
   assert.equal(r.hasUpdate, true)
+  assert.equal(r.spec, '@antecer/dsh-model-usage@' + next, 'npm 来源应给出精确版本的 spec')
 })
 
 test('版本检查：市场与 npm 都不高于本机时无更新', async (t) => {
@@ -88,7 +106,7 @@ test('版本检查：网络异常静默降级为无更新', async (t) => {
   mockFetch(t, () => new Error('network down'))
   const r = await createVersionService(ROOT).check()
   // 本地版本仍可读，远程来源失败 → latest 为 null、不报更新
-  assert.deepEqual(r, { current: LOCAL, latest: null, hasUpdate: false })
+  assert.deepEqual(r, { current: LOCAL, latest: null, hasUpdate: false, spec: null })
 })
 
 test('版本检查：并发调用单飞，只请求一轮', async (t) => {

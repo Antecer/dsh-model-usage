@@ -94,7 +94,7 @@ async function renderPlugin(t, opts = {}) {
     holidays: [], years: [2026], error: null,
   }
   const pricingCheckReply = opts.pricingCheck || { checkedAt: Date.now(), ok: true, drift: [] }
-  const updateReply = opts.update || { current: '1.0.0', latest: null, hasUpdate: false }
+  const updateReply = opts.update || { current: '1.0.0', latest: null, hasUpdate: false, autoUpdatable: false }
   globalThis.fetch = async (url, init) => {
     const body = JSON.parse(init.body)
     calls.push(body)
@@ -116,6 +116,7 @@ async function renderPlugin(t, opts = {}) {
     if (body.endpoint === 'pricingEnv') return { ok: true, status: 200, async json() { return { ok: true, value: pricingEnvReply } } }
     if (body.endpoint === 'pricingCheck') return { ok: true, status: 200, async json() { return { ok: true, value: pricingCheckReply } } }
     if (body.endpoint === 'versionCheck') return { ok: true, status: 200, async json() { return { ok: true, value: updateReply } } }
+    if (body.endpoint === 'updatePlugin') return { ok: true, status: 200, async json() { return { ok: true, value: { scheduled: true } } } }
     throw new Error('unexpected endpoint ' + body.endpoint)
   }
 
@@ -123,6 +124,12 @@ async function renderPlugin(t, opts = {}) {
   let slotProps = null
   const ctx = {
     effect(fn) { fn() },
+    // 可选服务注入（如 pluginNavigation）：仅当用例提供时才触发回调
+    inject(deps, fn) {
+      if (opts.navigation && Array.isArray(deps) && deps.includes('pluginNavigation')) {
+        fn({ pluginNavigation: opts.navigation, effect: (cb) => cb() })
+      }
+    },
     locale: { register() {} },
     // 可选服务（如浏览器侧模型目录 modelDirectories）：默认没有，按用例注入
     get: (name) => (opts.services || {})[name],
@@ -454,6 +461,36 @@ test('弹窗头部：检测到新版本时在 GitHub 按钮左侧显示 NEW 标�
   const children = [...head.children]
   const gh = children.find((el) => el.getAttribute('title') === 'GitHub')
   assert.ok(gh && children.indexOf(tag) < children.indexOf(gh), '标签应位于 GitHub 按钮左侧')
+  await unmount()
+})
+
+test('弹窗头部：点击 NEW 标签打开插件页更新入口并关闭弹窗', async (t) => {
+  const opened = []
+  const { container, click, unmount } = await renderPlugin(t, {
+    update: { current: '1.0.0', latest: '1.0.1', hasUpdate: true },
+    navigation: { openBundle: (name) => opened.push(name), openList: () => {} },
+  })
+  await click(container.querySelector('.dmu-pcard'))
+  const tag = document.querySelector('.dmu-update-tag')
+  assert.ok(tag, '应显示更新标签')
+  assert.equal(tag.tagName, 'BUTTON', '标签应为可点击按钮')
+  await click(tag)
+  assert.deepEqual(opened, ['@antecer/dsh-model-usage'], '点击应直达本插件的插件页')
+  assert.ok(!document.querySelector('.dmu-modal'), '点击后弹窗应关闭')
+  await unmount()
+})
+
+test('弹窗头部：可自动更新时点击标签调用更新接口并显示更新中', async (t) => {
+  const { container, click, calls, unmount } = await renderPlugin(t, {
+    update: { current: '1.0.0', latest: '1.0.1', hasUpdate: true, autoUpdatable: true },
+  })
+  await click(container.querySelector('.dmu-pcard'))
+  const tag = document.querySelector('.dmu-update-tag')
+  assert.ok(tag, '应显示更新标签')
+  assert.ok(String(tag.getAttribute('title')).includes('立即更新'), '可自动更新时提示文案应表明立即更新')
+  await click(tag)
+  assert.ok(calls.some((c) => c.endpoint === 'updatePlugin'), '点击应调用 updatePlugin 接口')
+  assert.equal(text(document.querySelector('.dmu-update-tag')), '更新中…', '更新期间标签应显示更新中')
   await unmount()
 })
 

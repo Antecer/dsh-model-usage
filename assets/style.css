@@ -730,22 +730,44 @@
   font-size: 14px;
 }
 
-/* ---------- 版本更新标签（对齐 DSH 插件管理「实验性」Tag 的 info 配色与尺寸） ---------- */
+/* ---------- 版本更新标签（对齐 DSH 插件管理「实验性」Tag 的 info 配色与尺寸；
+   可点击：直达插件管理页的更新入口） ---------- */
 .dmu-update-tag {
   flex: none;
   display: inline-flex;
   align-items: center;
   height: 18px;
   padding: 0 7px;
+  border: none;
   border-radius: 999px;
+  font: inherit;
   font-size: 10px;
   line-height: 1;
   font-weight: 600;
   letter-spacing: 0.2px;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
+  cursor: pointer;
   background: color-mix(in srgb, var(--dsw-alias-state-business-primary, #4176e6) 10%, transparent);
   color: var(--dsw-alias-state-business-primary, #4176e6);
+  transition: background-color 0.15s;
+
+  &:hover { background: color-mix(in srgb, var(--dsw-alias-state-business-primary, #4176e6) 18%, transparent); }
+
+  &:focus-visible {
+    outline: 2px solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary, #4176e6));
+    outline-offset: 2px;
+  }
+
+  &.is-busy {
+    cursor: progress;
+    opacity: 0.7;
+  }
+
+  &.is-error {
+    background: color-mix(in srgb, var(--dsw-alias-state-error-primary, #d92d20) 10%, transparent);
+    color: var(--dsw-alias-state-error-primary, #d92d20);
+  }
 }
 
 /* ---------- 统计范围切换（当天/近7天/近30天） ---------- */
