@@ -94,6 +94,7 @@ async function renderPlugin(t, opts = {}) {
     holidays: [], years: [2026], error: null,
   }
   const pricingCheckReply = opts.pricingCheck || { checkedAt: Date.now(), ok: true, drift: [] }
+  const updateReply = opts.update || { current: '1.0.0', latest: null, hasUpdate: false }
   globalThis.fetch = async (url, init) => {
     const body = JSON.parse(init.body)
     calls.push(body)
@@ -114,6 +115,7 @@ async function renderPlugin(t, opts = {}) {
     if (body.endpoint === 'zcodeLoginComplete') return { ok: true, status: 200, async json() { return { ok: true, value: { connected: true } } } }
     if (body.endpoint === 'pricingEnv') return { ok: true, status: 200, async json() { return { ok: true, value: pricingEnvReply } } }
     if (body.endpoint === 'pricingCheck') return { ok: true, status: 200, async json() { return { ok: true, value: pricingCheckReply } } }
+    if (body.endpoint === 'versionCheck') return { ok: true, status: 200, async json() { return { ok: true, value: updateReply } } }
     throw new Error('unexpected endpoint ' + body.endpoint)
   }
 
@@ -435,6 +437,33 @@ test('弹窗不再有总览按钮与卡片切换；全部刷新逐路由触发',
   await click(tools[0])
   const routes = calls.slice(before).filter((c) => c.endpoint === 'snapshot' && c.payload && c.payload.refresh).map((c) => c.payload.route).sort()
   assert.deepEqual(routes, ['kimi1', 'zai-coding-cn'], '应为每个供应商各发一次强制刷新')
+  await unmount()
+})
+
+test('弹窗头部：检测到新版本时在 GitHub 按钮左侧显示 NEW 标签', async (t) => {
+  const { container, click, unmount } = await renderPlugin(t, {
+    update: { current: '1.0.0', latest: '1.0.1', hasUpdate: true },
+  })
+  await click(container.querySelector('.dmu-pcard'))
+  const head = document.querySelector('.dmu-modal-head')
+  assert.ok(head, '弹窗应打开')
+  const tag = head.querySelector('.dmu-update-tag')
+  assert.ok(tag, '有新版本时应显示更新标签')
+  assert.equal(text(tag), 'NEW v1.0.1', '标签内容为 NEW + 最新版本号')
+  assert.ok(String(tag.getAttribute('title')).includes('1.0.1'), '悬停提示应包含新版本号')
+  const children = [...head.children]
+  const gh = children.find((el) => el.getAttribute('title') === 'GitHub')
+  assert.ok(gh && children.indexOf(tag) < children.indexOf(gh), '标签应位于 GitHub 按钮左侧')
+  await unmount()
+})
+
+test('弹窗头部：无新版本时不显示更新标签', async (t) => {
+  const { container, click, unmount } = await renderPlugin(t, {
+    update: { current: '1.0.1', latest: '1.0.1', hasUpdate: false },
+  })
+  await click(container.querySelector('.dmu-pcard'))
+  assert.ok(document.querySelector('.dmu-modal-head'), '弹窗应打开')
+  assert.ok(!document.querySelector('.dmu-update-tag'), '无更新时不应渲染标签')
   await unmount()
 })
 
