@@ -86,11 +86,20 @@ async function renderPlugin(t, opts = {}) {
   })
 
   const calls = []
+  let snapshotCalls = 0
   const statsReply = opts.statsReply || { ok: true, value: STATS }
   globalThis.fetch = async (url, init) => {
     const body = JSON.parse(init.body)
     calls.push(body)
-    if (body.endpoint === 'snapshot') return { ok: true, status: 200, async json() { return { ok: true, value: SNAP } } }
+    if (body.endpoint === 'snapshot') {
+      // 冷启动用例：可让快照挂起（snapshotGate）或前 N 次失败（snapshotFailures）
+      if (opts.snapshotGate) await opts.snapshotGate
+      snapshotCalls += 1
+      if (opts.snapshotFailures && snapshotCalls <= opts.snapshotFailures) {
+        return { ok: false, status: 503, async json() { return { ok: false, error: { message: 'temporarily unavailable' } } } }
+      }
+      return { ok: true, status: 200, async json() { return { ok: true, value: SNAP } } }
+    }
     if (body.endpoint === 'stats') return { ok: true, status: 200, async json() { return statsReply } }
     if (body.endpoint === 'current') return { ok: true, status: 200, async json() { return { ok: true, value: { route: null } } } }
     if (body.endpoint === 'resetUse') return { ok: true, status: 200, async json() { return { ok: true, value: { status: null } } } }
@@ -579,4 +588,60 @@ test('菜单打开隐藏卡片用 visibility 保留占位（避免菜单与触�
   assert.ok(rule, 'style.css 应包含菜单打开时隐藏卡片的规则')
   assert.ok(/visibility:\s*hidden/.test(rule[0]), '应使用 visibility: hidden 保留布局占位')
   assert.ok(!/display:\s*none/.test(rule[0]), '不应使用 display: none：侧栏底部收缩会使菜单与触发按钮错位')
+})
+
+// ---------------------------------------------------------------- 冷启动首屏
+// DSH 冷启动时 Host 要现查各额度接口，首次快照返回前卡片不应空白：
+// 无缓存 → 骨架卡片；有上次快照 → 立即回显并标「已过期」；首次请求失败 → 自动重试。
+
+test('冷启动快照未返回：立即渲染骨架卡片，数据到达后替换', async (t) => {
+  let release
+  const gate = new Promise((r) => { release = r })
+  const { container, unmount } = await renderPlugin(t, { snapshotGate: gate })
+  const ghost = container.querySelector('.dmu-pcard.dmu-pcard-ghost')
+  assert.ok(ghost, '快照返回前应立即渲染骨架卡片（不再空白等待）')
+  assert.equal(ghost.getAttribute('aria-label'), '加载中…', '骨架应带加载中提示')
+  assert.ok(!container.querySelector('.dmu-pcard:not(.dmu-pcard-ghost)'), '数据未到时不应渲染真实卡片')
+
+  const { act } = (await import('react')).default
+  await act(async () => { release(); await new Promise((r) => setTimeout(r, 0)) })
+  assert.ok(!container.querySelector('.dmu-pcard-ghost'), '数据到达后骨架应消失')
+  assert.ok(container.querySelector('.dmu-pcard:not(.dmu-pcard-ghost)'), '数据到达后应渲染真实卡片')
+  await unmount()
+})
+
+test('冷启动折叠态：快照未返回时先渲染骨架按钮', async (t) => {
+  const { container, unmount } = await renderPlugin(t, { wide: false, snapshotGate: new Promise(() => {}) })
+  assert.ok(container.querySelector('.dmu-foot.dmu-ghost'), '折叠态快照未返回时应渲染骨架按钮')
+  await unmount()
+})
+
+test('冷启动回显上次快照：卡片立即出现并标「已过期」，新数据到达后替换', async (t) => {
+  const env1 = await renderPlugin(t, { keepDom: true })
+  assert.ok(env1.container.querySelector('.dmu-pcard'), '首次渲染应渲染真实卡片')
+  const cached = env1.dom.window.localStorage.getItem('dmu:snaplast')
+  assert.ok(cached, '快照应写入 localStorage 供冷启动回显')
+  await env1.unmount()
+
+  let release
+  const gate = new Promise((r) => { release = r })
+  const env2 = await renderPlugin(t, { dom: env1.dom, snapshotGate: gate })
+  const card = env2.container.querySelector('.dmu-pcard:not(.dmu-pcard-ghost)')
+  assert.ok(card, '冷启动应回显上次快照的卡片（无需等 Host）')
+  assert.ok(text(card).includes('已过期'), '回显数据应标记为已过期')
+  const { act } = (await import('react')).default
+  await act(async () => { release(); await new Promise((r) => setTimeout(r, 0)) })
+  const fresh = env2.container.querySelector('.dmu-pcard:not(.dmu-pcard-ghost)')
+  assert.ok(fresh && !text(fresh).includes('已过期'), '新快照到达后应移除已过期标记')
+  await env2.unmount()
+})
+
+test('冷启动首次快照失败：有限退避重试，成功后渲染卡片', async (t) => {
+  const { container, unmount } = await renderPlugin(t, { snapshotFailures: 1 })
+  assert.ok(container.querySelector('.dmu-pcard-ghost'), '首次失败时应保持骨架占位')
+  await new Promise((r) => setTimeout(r, 1300)) // 首次重试 500 * 2^1 = 1s
+  const { act } = (await import('react')).default
+  await act(async () => {})
+  assert.ok(container.querySelector('.dmu-pcard:not(.dmu-pcard-ghost)'), '重试成功后应渲染真实卡片')
+  await unmount()
 })

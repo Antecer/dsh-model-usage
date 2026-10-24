@@ -67,6 +67,58 @@
   }
 }
 
+/* ---------- 冷启动骨架（快照返回前的占位，避免侧栏底部空白等待） ---------- */
+.dmu-pcard.dmu-pcard-ghost {
+  cursor: default;
+  pointer-events: none;
+  justify-content: center;
+  gap: 10px;
+  /* 与真实卡片高度接近，数据到达时布局不跳动 */
+  min-height: 74px;
+
+  &:hover {
+    border-color: var(--dsw-alias-settings-card-stroke, var(--dsw-alias-border-l1, #e3e7ed));
+    box-shadow: none;
+  }
+}
+
+.dmu-ghost-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dmu-ghost-circle {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--dsw-alias-interactive-bg-hover, rgba(2, 6, 16, 0.06));
+  animation: dmu-ghost-pulse 1.2s ease-in-out infinite;
+
+  &.dmu-ghost-circle-sm { width: 18px; height: 18px; }
+}
+
+.dmu-ghost-line {
+  flex: 1;
+  height: 10px;
+  border-radius: 6px;
+  background: var(--dsw-alias-interactive-bg-hover, rgba(2, 6, 16, 0.06));
+  animation: dmu-ghost-pulse 1.2s ease-in-out infinite;
+
+  &.dmu-ghost-line-sm { flex: none; width: 62%; height: 8px; }
+}
+
+.dmu-foot.dmu-ghost {
+  cursor: default;
+  pointer-events: none;
+}
+
+@keyframes dmu-ghost-pulse {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 1; }
+}
+
 /* ---------- 左下角账号菜单联动 ---------- */
 /* 账号菜单向上弹出时覆盖本卡片：菜单打开期间隐藏卡片，关闭后自动恢复。
    用 visibility（而非 display）保留占位，避免侧栏底部布局收缩导致菜单与触发按钮错位。 */
