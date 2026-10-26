@@ -94,6 +94,37 @@ test('Kimi 周窗口：used=0 时接口省略 used 字段，仍应显示 0% 周�
   assert.ok(p.windows.find((w) => w.key === 'rolling'), '5h 滚动窗口也应显示')
 })
 
+test('Kimi 月度配额账号：无 usage 汇总时按 usages.limit_month_total 显示月窗口', async (t) => {
+  // 实测「Kimi备用」这类月度配额账号：接口不返回 usage（周汇总），
+  // 只在 usages 里给 limit_5h 与 limit_month_total / limit_month_code。
+  const reply = {
+    limits: [{ window: { duration: 300, timeUnit: 'TIME_UNIT_MINUTE' }, detail: { limit: 100, used: 48, remaining: 52, resetTime: '2026-10-26T13:04:39.015764Z' } }],
+    usages: {
+      limit_5h: { used_ratio: 0.4763, reset_time: '2026-10-26T13:04:38Z' },
+      limit_month_total: { used_ratio: 0.2561, reset_time: '2026-11-23T00:00:00Z' },
+      limit_month_code: { used_ratio: 0.2561, reset_time: '2026-11-23T00:00:00Z' },
+    },
+  }
+  fixture(t, reply)
+  const host = harness({ adapters: { kimi1: 'kimi-coding' } }, ['kimi1'], { MODEL_USAGE_TEST_KIMI1: 'test-key' })
+  const p = (await host.snapshot()).providers[0]
+  assert.equal(p.status, 'ok')
+  const monthly = p.windows.find((w) => w.key === 'monthly')
+  assert.ok(monthly, '月度配额账号应显示月窗口')
+  assert.equal(monthly.label, '月')
+  assert.ok(Math.abs(monthly.usedPct - 25.61) < 0.01, '月用量比例应取自 used_ratio')
+  assert.ok(!p.windows.some((w) => w.key === 'weekly'), '月度套餐不应凭空出现周窗口')
+  assert.ok(p.windows.find((w) => w.key === 'rolling'), '5h 滚动窗口仍应显示')
+})
+
+test('Kimi 周汇总缺失但 usages.limit_7d 存在时，用 usages 兜底周窗口', async (t) => {
+  fixture(t, { usages: { limit_7d: { used_ratio: 0.42, reset_time: '2026-10-29T02:54:46Z' } } })
+  const host = harness({ adapters: { kimi1: 'kimi-coding' } }, ['kimi1'], { MODEL_USAGE_TEST_KIMI1: 'test-key' })
+  const weekly = (await host.snapshot()).providers[0].windows.find((w) => w.key === 'weekly')
+  assert.ok(weekly, 'usage 缺失时应由 usages.limit_7d 兜底出周窗口')
+  assert.ok(Math.abs(weekly.usedPct - 42) < 0.01, '周用量比例应取自 used_ratio')
+})
+
 test('显式 adapters 仅选查询模板，不必重复指定 provider 凭据', async (t) => {
   const requests = fixture(t)
   const host = harness({ adapters: { kimi1: 'kimi-coding' } }, ['kimi1'], { MODEL_USAGE_TEST_KIMI1: 'test-own-key' })

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.1（2026-10-26）
+
+- 修复 Kimi 月度配额账号（如「Kimi备用」）不显示额度：这类账号的接口不返回 `usage` 周汇总，只在 `usages` 里下发 `limit_month_total` / `limit_month_code`。适配器补充解析 `usages`，按 `used_ratio` 显示「月」窗口（重置时间取 `reset_time`），月度套餐不再被误判为「没有周额度」
+- 补充 `usages.limit_7d` 兜底：`usage` 周汇总缺失时用该字段生成周窗口，避免「周」整行消失
+- 新增 2 个测试：月度配额账号显示月窗口（且不凭空出现周窗口）、周汇总缺失时由 `usages` 兜底
+
 ## 1.2.0（2026-10-24）
 
 - 新增弹窗头部「版本更新」标签：打开模型用量弹窗时向 Host 查询市场索引（GitHub Pages）与 npm registry 的最新版本，与本机安装版本做 SemVer 比较，发现更高版本时在 GitHub 按钮左侧显示蓝色胶囊标签 `NEW vX.X.X`（配色与尺寸对齐 DSH 插件管理页的 info 态 Tag）；Host 侧 30 分钟缓存、并发单飞、网络失败静默降级
