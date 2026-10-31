@@ -36,14 +36,11 @@ gh repo edit Antecer/dsh-model-usage --add-topic dsh-plugin
 
 ## 三、启用 GitHub Pages（发布市场索引）
 
-仓库已包含 `.github/workflows/pages.yml`，push 到 `main` 后会自动部署 `site/` 目录。
+仓库的 [Pages 工作流](../.github/workflows/pages.yml) 在 `main` 的指定路径变更时触发，并通过版本门禁决定是否部署；也可手动运行（见第四节）。
 
 1. 打开仓库 Settings → Pages → Build and deployment。
 2. Source 选择 **GitHub Actions**。
-3. 注意：**必须先启用 Pages 再触发部署**。若尚未启用就推送了 `site/` 变更，`Deploy plugin market` 会在
-   `actions/configure-pages@v5` 步骤失败并报 `Get Pages site failed ... Not Found`——这是 Pages 站点不存在
-   （未启用）导致的，不是工作流配置错误；工作流已内置启用检查，会直接给出启用指引。启用后手动 Run workflow
-   即可补部署。
+3. **先启用 Pages 再触发部署**。工作流在 `actions/configure-pages@v6` 前检查 Pages 状态；收到 404 时会停止并给出启用指引。启用后手动 Run workflow 补部署。
 4. 等 Actions 里的 `Deploy plugin market` 跑完（或手动 Run workflow）。
 5. 确认索引可访问：https://antecer.github.io/dsh-model-usage/index.json 返回 200 且为 JSON。
 
@@ -137,10 +134,10 @@ DSH >= 0.2.0-rc.2 < 0.3.0；Web 平台；需要对应供应商的 apiKeyEnv 才�
 MIT
 
 ### 截图 / 演示
-见仓库 README（docs/card.webp、docs/main.webp）。
+见仓库 README 的插件界面截图（docs/panel.webp）。
 
 ### 补充说明
-凭据只在插件 Host 内存中使用，不进入浏览器；仅访问各服务商官方额度接口与 profile 中配置的 baseURL；账本只记录 token 聚合数字，不含对话内容。
+凭据仅在 Host 解析使用，不返回浏览器。网络请求包括服务商额度、ZCode 登录/重置/赠额及模型生成、profile 配置的 baseURL，以及版本、价格和节假日数据源；账本不含对话内容。
 ```
 
 ### Open Plugin Market（dshopen.org）

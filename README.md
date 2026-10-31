@@ -2,7 +2,7 @@
 
 DSH（DeepSeek Harness）Web 插件：在侧栏底部常驻显示模型供应商的额度与本机用量，点击打开双列详情弹窗。
 
-作者：Antecer · 许可：MIT
+作者：Antecer · 原创实现：[MIT](LICENSE)；内嵌 ZCode system 文本：[Apache-2.0](lib/zcode/ZCode-LICENSE)
 
 ## 截图
 
@@ -21,8 +21,9 @@ DSH（DeepSeek Harness）Web 插件：在侧栏底部常驻显示模型供应商
 - **四个统计分区**：会话统计 → 模型统计（行可展开每次调用）→ 渠道统计 → 历史统计（按日新到旧）；统一信息列「调用次数 / 输入 tokens / 缓存 tokens / 输出 tokens」，范围可选今日 / 本周 / 本月 / 全部（日历口径），UI 偏好（范围与各分区展开态）经 localStorage 持久化
 - **额度数据**：服务商接口返回的真实余额 / 剩余额度 / 订阅窗口（按 5h → 日 → 周 → 月排列）与重置倒计时、余量配色（≥60% 蓝 / ≥30% 绿 / ≥5% 橘 / <5% 亮红）
 - **GLM Coding Plan 额度重置**（ZCode 同款）：与 ZCode 客户端共享登录凭据，5h/周窗口显示「重置 N」按钮，点击弹出「可重置额度」弹窗（当前额度卡片 + 重置行，二次确认即核销）；未登录 ZCode 时可内嵌 OAuth 登录并回写共享凭据
+- **ZCode 赠送额度（Start Plan）**：领取后通过 `glm-gift` 路由使用赠送模型；关联 GLM 卡片显示余量与到期时间，耗尽或到期的模型在同步时移除。需要有效 ZCode 登录会话与本机设备标识，仅支持文本输入。自动匹配当前 ZCode 账户对应的 GLM provider，多账户关联与歧义处理见下方配置。
 - **sub2api 中继自动识别**：从 DSH profile 读取供应商 baseURL 与凭据引用，自动探测 `GET /v1/usage`，无需手动配置
-- **零配置凭据复用**：查询模板按 profile 中的 baseURL 自动匹配（host 精确匹配），凭据直接复用 provider 的 `apiKeyEnv`，多账号互不串号；`credentials` / `adapters` 只在需要覆盖默认行为时才配置。插件 Host 进程没有 profile 环境变量时，按当前 llm 路由命中数自动识别正在运行的 profile
+- **零配置凭据复用**：查询模板按 profile 中的 baseURL 自动匹配（host 精确匹配），凭据直接复用 provider 的 `apiKeyEnv`，多账号互不串号；`credentials` / `adapters` 只在需要覆盖默认行为时才配置。优先使用 Host 明确提供的 profile 目录，patch 配置覆盖基础配置；缺少目录与环境变量时才按路由命中数扫描，最高分并列不猜测
 - **模板字符串**：卡片摘要可用 `card.template` 自定义排列
 
 ## 安装
@@ -62,9 +63,9 @@ dsh plugin --profile <profile> add link:/path/to/dsh-model-usage
 
 ## 改动生效方式
 
-- **`lib/client.js`（界面）**：刷新页面即可
-- **`lib/index.mjs` / `lib/adapters.mjs` / `lib/profile.mjs` / `lib/ledger.mjs` / `lib/zcode/*.mjs`（Host 取数、账本与 GLM 重置）**：在插件列表里重启本插件即可，无需重启整个应用
-- **profile 配置（`cordis.patch.yml`）**：插件侧 60 秒内自动感知；聊天侧的 provider 变更需重载宿主
+- **界面代码或样式**：更新插件后刷新页面；源码开发还需按宿主的插件加载方式重新构建。
+- **Host 代码**：更新后在插件列表重启本插件；若宿主仍使用旧模块，再重载宿主。
+- **profile 配置**：插件会周期性重读供应商配置；聊天侧 provider 变更按宿主要求重载。
 
 ## 供应商支持
 
@@ -73,7 +74,7 @@ dsh plugin --profile <profile> add link:/path/to/dsh-model-usage
 | DeepSeek API | `api.deepseek.com/user/balance` | 余额（总/充值/赠金） |
 | DeepSeek 账号 | DSH `deepseekAccount` 服务 | 账号钱包 |
 | GLM Coding Plan | `open.bigmodel.cn` / `api.z.ai` 额度接口 | 5h / 周 / 每月 MCP 次数 |
-| Kimi Coding | `api.kimi.com/coding/v1/usages` | 周 + 滚动窗口 |
+| Kimi Coding | `api.kimi.com/coding/v1/usages` | 周 / 月 + 滚动窗口 |
 | Moonshot / Kimi 平台 | `api.moonshot.{ai,cn}/v1/users/me/balance` | 余额 |
 | OpenRouter | `openrouter.ai/api/v1/credits` | credits 余额 |
 | MiniMax Token Plan | `api.minimax.io` / `api.minimaxi.com` `/v1/token_plan/remains` | 5h + 周 |
@@ -81,6 +82,8 @@ dsh plugin --profile <profile> add link:/path/to/dsh-model-usage
 | 小米 MiMo | `platform.xiaomimimo.com/api/v1/balance` | 余额 |
 | GitHub Copilot | `api.github.com/copilot_internal/user` | Premium / Chat / 补全配额 |
 | **sub2api 中继** | `{baseURL}/v1/usage`（自动识别） | 剩余额度 / 速率窗口 / 订阅限额 / 余额 |
+
+GLM 赠送额度已验证 `GLM-5.3-Flash` 的文本、工具调用及工具结果回放，正文、usage 与赠额桶扣减一致；其它赠送模型尚未逐一真实验证。模型上限、请求方式与兼容限制见 [Start Plan 接入说明](docs/start-plan-direct.md)。
 
 没有公开额度接口的供应商（OpenAI、Anthropic 等）自动隐藏，不报错。
 
@@ -95,7 +98,7 @@ dsh plugin --profile <profile> add link:/path/to/dsh-model-usage
 | `credentials` | `{}` | 按路由覆盖凭据引用（可选；缺省复用 provider 在 profile 中的 `apiKeyEnv`） |
 | `adapters` | `{}` | 按路由显式指定查询模板（可选；缺省按 profile 的 baseURL 自动识别，见下） |
 | `sub2api` | `{}` | 按路由显式指定 sub2api 端点：`{ baseURL, keyRef }`（缺省自动从 profile 探测） |
-| `glm` | `{}` | GLM 高级参数：`organization` / `project` / `planType` |
+| `glm` | `{}` | GLM 参数：`organization` / `project` / `planType`；`giftProvider` 指定 ZCode 额度关联的 GLM provider 路由（见下） |
 | `card.template` | `""` | 卡片摘要模板字符串（见下） |
 | `pricing` | 官方默认值 | DeepSeek 峰谷规则与单价：`peakDays` / `peakWindows` / `models`（元/百万 tokens），用于卡片峰谷提示与官方价格校验 |
 
@@ -106,6 +109,22 @@ dsh plugin --profile <profile> add link:/path/to/dsh-model-usage
 内置模板覆盖 Kimi Coding（`api.kimi.com/coding/*`）、Moonshot、GLM Coding（`api.z.ai` / `open.bigmodel.cn`）、DeepSeek、OpenRouter、MiniMax、OpenCode Go、小米 MiMo 等。用量接口地址与响应解析都内置在插件代码里，profile 中的 provider 只需有 `baseURL` + `apiKeyEnv` 即可显示额度，无需在插件配置里重复书写凭据。
 
 凭据引用优先级：`credentials` 显式覆盖 > provider 自己的 `apiKeyEnv`（一旦配置即为唯一来源，不回退到共享默认值，多账号不串号）> 适配器默认环境变量 > 路由名派生。
+
+### ZCode 额度关联与到期回退
+
+插件使用当前 ZCode 登录账户查询其个人项目 API Key，并与 GLM provider 的完整 Key 精确比对；只有匹配到唯一路由才自动关联。多个不同 GLM 账户无需默认手工配置；同一账户匹配多个 provider 时仍有路由歧义，可用 `glm.giftProvider` 明确选择或覆盖自动结果，例如：
+
+```yaml
+config:
+  glm:
+    giftProvider: my-glm-route
+```
+
+关联路由承载 ZCode 额度、领取入口和赠送分组，也作为到期回退的父路由。插件只使用当前 ZCode active 账户的一份会话；`family` 仅用于选择官方查询域名，Key 前缀不作为账户身份证明。显式配置本身不核验账户归属，也不切换 ZCode 登录。分页、团队 Key、非 `id.secret` 凭据或查询失败时不自动绑定；无匹配或歧义时不关联卡片，已有有效赠额的模型仍可调用。协议和验证范围见 [Start Plan 接入说明](docs/start-plan-direct.md#账户自动关联与排序)。
+
+关联后，分组名为「<GLM 名称> · 赠送」，选中赠送模型时侧栏跟随该卡片。分组紧邻排序依赖宿主内部注册表；结构不兼容时保留宿主原顺序。
+
+普通已挂载会话选中的赠送模型明确到期后，插件尝试将下一请求切换到关联父分组的同名模型（模型 id 匹配可忽略大小写），使用父 provider 的配置与额度；不改全局默认，也不打断生成。只有已保存的同名 token 桶全部到期才触发；额度用尽、查询失败或未知截止不触发。找不到确定目标或宿主选模接口不兼容时保留原选择。证据保存与会话范围见 [到期回退边界](docs/start-plan-direct.md#到期回退)。
 
 ### 卡片模板
 
@@ -156,7 +175,7 @@ config:
 - **额度**：服务商接口返回的真实值（剩余额度 / 余额 / 窗口已用百分比）
 - **本机用量**：`assistant/message` 事件中服务商回传的 usage（input + cacheRead + cacheWrite + output；tokens = 四项合计，缓存 tokens = cacheRead + cacheWrite）
 - **统计维度**：按供应商/模型（渠道、模型统计）、按会话（记录会话 id，标题经 sessions 服务实时解析）、按日（历史统计，新到旧）
-- **统计范围**：今日 / 本周（周一起）/ 本月（1 号起）/ 全部；本机、插件启用后写入会话日志的调用；其他设备与旁路调用不计
+- **统计范围**：今日 / 本周（周一起）/ 本月（1 号起）/ 全部；只记录插件启用后收到的本机调用事件，其他设备与旁路调用不计，不回填历史会话日志。
 - 账本文件：`$DSH_HOME/model-usage/ledger.json`（按日聚合保留 **180 天**，加载时自动迁移旧版格式；热力图读取最近 364 天）
 - **不做金额估算**：订阅套餐按套餐额度计费，金额以服务商账单为准（`pricing` 单价仅用于峰谷提示与官方价格校验，不用于账单估算）
 
@@ -170,9 +189,11 @@ config:
 ## 开发
 
 ```bash
-node --check lib/index.mjs lib/adapters.mjs lib/profile.mjs lib/ledger.mjs lib/zcode/*.mjs lib/client.js
+for file in lib/*.mjs lib/zcode/*.mjs lib/client.js; do node --check "$file" || exit; done
 node --test test/
 ```
+
+测试覆盖请求构造、SSE、余额同步与界面交互。真实 `@deepseek-ai/dsh-llm` 不可用时，相关集成测试会跳过；可设置 `DSH_LLM_ENTRY` 指向其入口后重新运行。自动测试不等于真实服务或 GUI 完整对话验证。
 
 注意：插件客户端必须单文件交付（DSH ModuleLoader 按包名注册模块，不支持相对路径 require），浏览器侧只有 `lib/client.js` 一个文件，`trackCurrentRoute`（会话跟随）与 `createTicker`（秒级 ticker）等逻辑直接内联其中，即唯一实现；client 测试通过抽取内联函数的方式直接回归发布产物。Host 侧文件统一使用 `.mjs` 后缀，与浏览器脚本区分。
 

@@ -1,0 +1,10 @@
+providers:
+  zai-coding-cn:
+    baseURL: https://api.z.ai/api/anthropic
+    apiKeyEnv: MODEL_USAGE_TEST_ZAI
+  bigmodel-coding:
+    baseURL: https://open.bigmodel.cn/api/anthropic
+    apiKeyEnv: MODEL_USAGE_TEST_BIGMODEL
+  bigmodel-second:
+    baseURL: https://open.bigmodel.cn/api/anthropic
+    apiKeyEnv: MODEL_USAGE_TEST_BIGMODEL_SECOND

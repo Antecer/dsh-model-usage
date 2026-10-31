@@ -71,6 +71,7 @@ async function renderPlugin(t, opts = {}) {
   const dom = opts.dom || new JSDOM('<!doctype html><html><head></head><body></body></html>', { url: 'http://localhost/', pretendToBeVisual: true })
   globalThis.window = dom.window
   globalThis.document = dom.window.document
+  Object.defineProperty(globalThis, 'navigator', { value: dom.window.navigator, configurable: true, writable: true })
   if (!opts.dom) { try { dom.window.localStorage.clear() } catch { /* 测试间偏好隔离 */ } }
   globalThis.IS_REACT_ACT_ENVIRONMENT = true
   const React = (await import('react')).default
@@ -111,6 +112,11 @@ async function renderPlugin(t, opts = {}) {
     if (body.endpoint === 'stats') return { ok: true, status: 200, async json() { return statsReply } }
     if (body.endpoint === 'current') return { ok: true, status: 200, async json() { return { ok: true, value: { route: null } } } }
     if (body.endpoint === 'resetUse') return { ok: true, status: 200, async json() { return { ok: true, value: { status: null } } } }
+    if (body.endpoint === 'claimOffer') {
+      if (opts.claimGate) await opts.claimGate
+      const value = opts.claimReply || { status: 'success', plan: { planId: body.payload.planId, name: 'ZCODE GLOBAL BUILD' } }
+      return { ok: true, status: 200, async json() { return { ok: true, value } } }
+    }
     if (body.endpoint === 'zcodeAuthState') return { ok: true, status: 200, async json() { return { ok: true, value: { connected: false, source: null, family: null } } } }
     if (body.endpoint === 'zcodeLoginStart') return { ok: true, status: 200, async json() { return { ok: true, value: { url: 'https://bigmodel.cn/login?mock=1', state: 'st-1' } } } }
     if (body.endpoint === 'zcodeLoginComplete') return { ok: true, status: 200, async json() { return { ok: true, value: { connected: true } } } }
@@ -192,7 +198,114 @@ test('侧栏渲染状态最紧急的供应商卡片（真实 DOM）', async (t) 
   assert.ok(card.querySelector('.dmu-win-fill'), '窗口条应渲染')
   assert.ok(text(card).includes('5s'), '刷新时间应显示 5s')
   assert.ok(text(card).includes('调用后开始计时'), '0% 滚动窗无 resetAt 时应提示未开始而非留空')
+  assert.ok(text(card).includes('100%') && text(card).includes('8.0%'), '窗口剩余百分比应保留 1 位小数（100.0% 省略小数）')
   await unmount()
+})
+
+test('GLM 卡片赠送额度：百分比、token 数与到期时间', async (t) => {
+  const snap = structuredClone(SNAP)
+  const glm = snap.providers.find((p) => p.adapter === 'glm-coding')
+  // 2 天 12 小时 + 2 分钟余量，避免渲染耗时把小时数压到 11
+  const expiresAt = NOW + (2 * 24 + 12) * 3600e3 + 2 * 60e3
+  glm.gift = { models: [{ id: 'glm-5.3-flash', remaining: 484544883, total: 500000000, expiresAt }] }
+  const { container } = await renderPlugin(t, { snap })
+  const gift = container.querySelector('.dmu-pcard .dmu-gift')
+  assert.ok(gift, 'GLM 卡片应渲染赠送额度进度条')
+  assert.equal(text(gift.querySelector('.dmu-gift-title')), '赠送额度', '上方左对齐不再显示模型名')
+  assert.equal(text(gift.querySelector('.dmu-gift-pct')), '96.9%', '进度条右上角显示余量百分比')
+  assert.equal(gift.querySelector('.dmu-gift-fill').style.width, '96.9%', '进度条按 remaining / total 渲染')
+  assert.equal(text(gift.querySelector('.dmu-gift-expiry')), '2天12小时后过期', '下方左侧显示到期倒计时')
+  assert.equal(text(gift.querySelector('.dmu-gift-tokens')), '484,544,883', '下方右侧显示实际 token 数')
+  assert.ok(!text(gift).includes('glm-5.3-flash'), '卡片内不再显示模型名')
+  assert.equal(container.querySelector('.dmu-giftline'), null, '旧的一行式赠送文案不应再出现')
+})
+
+test('GLM 卡片赠送额度：已过期模型整项移除', async (t) => {
+  const snap = structuredClone(SNAP)
+  const glm = snap.providers.find((p) => p.adapter === 'glm-coding')
+  glm.gift = { models: [{ id: 'glm-5.3-flash', remaining: 100, total: 1000, expiresAt: NOW - 60000 }] }
+  const { container } = await renderPlugin(t, { snap })
+  assert.equal(container.querySelector('.dmu-pcard .dmu-gift'), null, '已过期赠送额度应整项移除，不显示已到期文案')
+  assert.ok(!text(container.querySelector('.dmu-pcard')).includes('已到期'), '卡片不应出现赠送额度的到期文案')
+})
+
+test('会话选中赠送模型时展示关联 GLM 卡片，而非默认第一张', async (t) => {
+  const snap = structuredClone(SNAP)
+  // 让 Kimi 成为“最紧急”卡片：若无关联映射，旧逻辑会错显 Kimi
+  const kimi = snap.providers.find((p) => p.route === 'kimi1')
+  kimi.status = 'error'
+  kimi.error = { message: 'mock down' }
+  const glm = snap.providers.find((p) => p.adapter === 'glm-coding')
+  glm.gift = { models: [{ id: 'glm-5.3-flash', remaining: 900, total: 1000, expiresAt: NOW + 3600e3 }] }
+  snap.providers.unshift({ ...structuredClone(glm), route: 'other-glm', displayName: 'Other GLM' })
+  snap.giftProvider = { route: 'glm-gift', parentRoute: glm.route }
+  const catalog = { catalog: { store: { getSnapshot: () => ({ value: { default: { provider: 'glm-gift' } }, status: 'ready' }), subscribe: () => () => {} } } }
+  const { container } = await renderPlugin(t, { snap, services: { modelDirectories: catalog } })
+  const card = container.querySelector('.dmu-pcard')
+  assert.ok(text(card).includes('GLM Coding'), '选中 glm-gift 模型时应显示关联 GLM 卡片')
+  assert.ok(!text(card).includes('Kimi 一号'), '不得回退到状态最紧急的 Kimi 卡片')
+  assert.ok(card.querySelector('.dmu-gift'), '关联 GLM 卡片上应有赠送额度进度条')
+})
+
+test('卸载后迟到的快照不得写回持久缓存', async (t) => {
+  let release
+  const snapshotGate = new Promise((resolve) => { release = resolve })
+  const { dom, unmount } = await renderPlugin(t, { snapshotGate, keepDom: true })
+  t.after(() => dom.window.close())
+  await unmount()
+  release()
+  const { act } = await import('react')
+  await act(async () => {})
+  assert.equal(dom.window.localStorage.getItem('dmu:snaplast'), null)
+})
+
+test('赠送块到期后无须刷新快照，侧栏和面板同时移除', async (t) => {
+  let now = NOW
+  t.mock.method(Date, 'now', () => now)
+  const snap = structuredClone(SNAP)
+  snap.refreshSeconds = 86400
+  for (const p of snap.providers) p.fetchedAt = NOW - 2 * 3600e3
+  const glm = snap.providers.find((p) => p.adapter === 'glm-coding')
+  glm.gift = { models: [{ id: 'expiring', remaining: 100, total: 1000, expiresAt: NOW + 2000 }] }
+  const { container, click, calls, unmount } = await renderPlugin(t, { snap })
+  await click(container.querySelector('.dmu-pcard'))
+  assert.equal(document.querySelectorAll('.dmu-gift').length, 2)
+  const snapshotsBefore = calls.filter((c) => c.endpoint === 'snapshot').length
+  const { act } = await import('react')
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 2100)) })
+  now += 2000
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 1100)) })
+  assert.equal(document.querySelectorAll('.dmu-gift').length, 0, '到期秒级移除，不依赖刷新时间文字变化')
+  assert.equal(calls.filter((c) => c.endpoint === 'snapshot').length, snapshotsBefore)
+  await unmount()
+})
+
+for (const giftProvider of [undefined, { route: 'glm-gift', parentRoute: null }, { route: 'glm-gift', parentRoute: 'missing' }]) {
+  test('赠送关联不明确时不猜测 GLM 或其他卡片：' + JSON.stringify(giftProvider), async (t) => {
+    const snap = { ...SNAP, giftProvider }
+    const catalog = { catalog: { store: { getSnapshot: () => ({ value: { default: { provider: 'glm-gift' } }, status: 'ready' }), subscribe: () => () => {} } } }
+    const { container } = await renderPlugin(t, { snap, services: { modelDirectories: catalog } })
+    assert.ok(!container.querySelector('.dmu-pcard'), '无明确映射不展示卡片')
+  })
+}
+
+test('窗口和赠送百分比统一保留一位小数，100% 例外', async (t) => {
+  const snap = structuredClone(SNAP)
+  const glm = snap.providers.find((p) => p.adapter === 'glm-coding')
+  const values = [0, 8, 96.9, 100]
+  glm.windows = values.map((remaining, i) => ({ key: String(i), usedPct: 100 - remaining }))
+  glm.gift = { models: values.map((remaining, i) => ({ id: String(i), remaining, total: 100, expiresAt: NOW + 3600e3 })) }
+  const { container } = await renderPlugin(t, { snap })
+  const expected = ['0.0%', '8.0%', '96.9%', '100%']
+  assert.deepEqual([...container.querySelectorAll('.dmu-win-head b')].map(text), expected)
+  assert.deepEqual([...container.querySelectorAll('.dmu-gift-pct')].map(text), expected)
+})
+
+test('赠送和窗口共用百分比排版，并同时尊重减少动态效果', () => {
+  const css = readFileSync(new URL('../assets/style.css', import.meta.url), 'utf8')
+  assert.match(css, /\.dmu-win-head,\s*\.dmu-gift-head\s*\{[^}]*font-size:\s*12\.5px;/s)
+  assert.match(css, /\.dmu-win-head b,\s*\.dmu-gift-pct,\s*\.dmu-gift-tokens\s*\{[^}]*font-variant-numeric:\s*tabular-nums;/s)
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\)\s*\{\s*\.dmu-wins[^}]*,\s*\.dmu-gift[^}]*transition:\s*none;/s)
 })
 
 test('新建对话（无选择）：侧栏卡片立即跟随模型目录默认供应商', async (t) => {
@@ -357,6 +470,7 @@ test('历史统计：按日统计表日期从新到旧排列', async (t) => {
 })
 
 test('模型统计：展开模型行显示每次调用明细', async (t) => {
+  t.mock.method(Date, 'now', () => NOW)
   const { container, click, unmount } = await renderPlugin(t, )
   await click(container.querySelector('.dmu-pcard'))
   const overlay = document.querySelector('.dmu-overlay')
@@ -575,6 +689,185 @@ test('GLM 卡片：账户小按钮 + 窗口重置按钮（含机会数）', asyn
   await unmount()
 })
 
+test('GLM 赠送领取横幅：侧栏与面板复用 ZCode 同款底部浮层', async (t) => {
+  const offer = {
+    campaignId: 'campaign-gift-1', planId: 'plan-gift-1', name: 'ZCODE GLOBAL BUILD',
+    entitlements: [{ model: 'GLM-5.3-Flash', units: 300000000, unitType: 'token', period: 'one_time' }],
+    successPopup: {
+      title: { format: 'plaintext', content: 'ZCODE GLOBAL BUILD 领取成功' },
+      description: { format: 'html', content: '<p><b>GLM-5.3-Flash</b> 已可使用。</p>' },
+      buttons: [
+        { text: { format: 'plaintext', content: '模型设置' }, action: { type: 'navigate', args: { page: 'settings', section: 'models' } } },
+        { text: { format: 'plaintext', content: '复制分享' }, theme: { variant: 'secondary' }, action: { type: 'copy_text', args: { text: '我在 ZCode 领取了 GLM-5.3-Flash。\nhttps://zcode.z.ai' } } },
+      ],
+    },
+  }
+  const snap = {
+    ...SNAP,
+    providers: SNAP.providers.map((p) => p.route === 'zai-coding-cn'
+      ? {
+          ...p,
+          windows: [...p.windows, { key: 'mcp', label: 'MCP/月', usedPct: 91.8, countBased: true, limit: 1000, remaining: 82 }],
+          claimOffers: [offer],
+        }
+      : p),
+  }
+  const { container, click, calls, unmount, dom } = await renderPlugin(t, { snap })
+  const sidebarCard = container.querySelector('.dmu-footwrap > .dmu-pcard')
+  assert.ok(sidebarCard && text(sidebarCard).includes('GLM Coding'), '侧栏应显示同一张 GLM 卡片')
+  const sidebarBanner = sidebarCard.querySelector('.dmu-claim')
+  assert.ok(sidebarBanner, '侧栏 GLM 卡片内部应显示领取横幅')
+  assert.ok(sidebarBanner.querySelector('.dmu-claim-wordmark'), '应使用 ZCode 原始 wordmark SVG')
+  assert.equal(text(sidebarBanner.querySelector('.dmu-claim-campaign')), 'GLOBAL BUILD', '活动名应移除重复的 ZCode')
+  assert.ok(text(sidebarBanner.querySelector('.dmu-claim-amount')).includes('300,000,000 tokens'), '应显示完整赠送额度')
+  assert.equal(text(sidebarBanner.querySelector('.dmu-claim-model')), 'GLM-5.3-Flash 额度')
+  const claimPill = sidebarBanner.querySelector('.dmu-claim-pill')
+  assert.equal(text(claimPill), '领取')
+  assert.equal(claimPill.tagName, 'SPAN', '领取胶囊应只是装饰，不是独立按钮')
+  assert.equal(claimPill.getAttribute('aria-hidden'), 'true')
+  assert.equal(sidebarBanner.getAttribute('role'), 'button', '整块横幅才是确认触发区')
+
+  await click(sidebarCard)
+  const panelCard = [...document.querySelectorAll('.dmu-list .dmu-pcard')]
+    .find((el) => text(el).includes('GLM Coding'))
+  const panelBanner = panelCard && panelCard.querySelector('.dmu-claim')
+  assert.ok(panelBanner, '面板列表中的同一 GLM 卡片也应显示领取横幅')
+  assert.equal(text(panelBanner), text(sidebarBanner), '侧栏与面板应复用完全相同的横幅内容')
+  assert.ok(text(panelCard).includes('MCP/月'), '被浮层覆盖的 MCP/月窗口仍保留在原卡片中')
+
+  const style = readFileSync(new URL('../assets/style.css', import.meta.url), 'utf8')
+  assert.match(style, /\.dmu-pcard \.dmu-claim\s*\{[^}]*position:\s*absolute;[^}]*height:\s*96px;/s,
+    '应使用 ZCode 原始 96px 绝对定位浮层')
+  assert.match(style, /\.dmu-pcard \.dmu-claim\s*\{[^}]*bottom:\s*8px;/s, '浮层应在 GLM 卡片内部下对齐')
+  assert.doesNotMatch(style, /\.dmu-pcard\.dmu-pcard-has-claim\s*\{[^}]*padding-bottom:/s,
+    '不得通过底部 padding 推开用量信息；横幅允许覆盖')
+
+  await click(claimPill) // 点击装饰胶囊，事件应冒泡到整块横幅并只触发一次领取
+  const claimCalls = calls.filter((c) => c.endpoint === 'claimOffer')
+  assert.equal(claimCalls.length, 1, '点击领取胶囊应通过整块横幅接通 claimOffer RPC')
+  assert.deepEqual(claimCalls[0].payload, { planId: 'plan-gift-1', campaignId: 'campaign-gift-1' })
+  assert.ok(!container.querySelector('.dmu-footwrap .dmu-claim'), '领取成功后应立即隐藏横幅')
+  const resultDialog = document.querySelector('.dmu-dialog-claim-result')
+  assert.ok(resultDialog, '成功应打开服务端 success_popup，而不是在横幅内显示一行成功文字')
+  assert.ok(text(resultDialog).includes('ZCODE GLOBAL BUILD 领取成功'))
+  assert.ok(text(resultDialog).includes('GLM-5.3-Flash 已可使用。'), 'HTML 描述应按纯文本安全读取')
+  const copied = []
+  Object.defineProperty(dom.window.navigator, 'clipboard', {
+    configurable: true,
+    value: { writeText: async (value) => { copied.push(value) } },
+  })
+  const copyButton = [...resultDialog.querySelectorAll('button')].find((button) => text(button) === '复制分享')
+  await click(copyButton)
+  assert.equal(copied.length, 1, '复制分享应执行 copy_text action')
+  assert.ok(copied[0].includes('https://zcode.z.ai'), '分享文案应保留 ZCode 入口')
+  assert.ok(text(copyButton).includes('已复制'), '复制成功后按钮应原位反馈')
+  await click(resultDialog.querySelector('.dmu-headbtn'))
+  assert.ok(!document.querySelector('.dmu-dialog-claim-result'), '结果弹窗应可关闭')
+  assert.ok(!calls.some((c) => c.endpoint === 'claimOfferDismiss'), '关闭成功结果弹窗不应上报 cancel')
+  await unmount()
+})
+
+test('GLM 领取：pending 防重入，右上角 X 原位变为 loading', async (t) => {
+  const offer = {
+    campaignId: 'campaign-pending', planId: 'plan-pending', name: 'ZCODE GLOBAL BUILD',
+    entitlements: [{ model: 'GLM-5.3-Flash', units: 300000000, unitType: 'token', period: 'one_time' }],
+  }
+  const snap = {
+    ...SNAP,
+    providers: SNAP.providers.map((p) => p.route === 'zai-coding-cn' ? { ...p, claimOffers: [offer] } : p),
+  }
+  let releaseClaim
+  const claimGate = new Promise((resolve) => { releaseClaim = resolve })
+  const { container, click, calls, unmount } = await renderPlugin(t, { snap, claimGate })
+  const banner = container.querySelector('.dmu-footwrap .dmu-claim')
+  await click(banner.querySelector('.dmu-claim-pill'))
+  assert.ok(banner.querySelector('.dmu-claim-pending'), 'pending 时右上角应显示 loading')
+  assert.ok(!banner.querySelector('.dmu-claim-x'), 'pending 时不再显示关闭 X')
+  assert.equal(text(banner.querySelector('.dmu-claim-pill')), '领取', '领取胶囊在 pending 时保持静态')
+  assert.equal(calls.filter((c) => c.endpoint === 'claimOffer').length, 1)
+  await click(banner)
+  assert.equal(calls.filter((c) => c.endpoint === 'claimOffer').length, 1, 'pending 期间重复点击不得重发领取')
+  releaseClaim()
+  await click(document.body)
+  assert.ok(!container.querySelector('.dmu-footwrap .dmu-claim'), '成功结束后应退出 pending 并隐藏当前横幅')
+  await unmount()
+})
+
+test('GLM 领取：非终止型失败使用独立弹窗且保留横幅', async (t) => {
+  const offer = {
+    campaignId: 'campaign-failure', planId: 'plan-failure', name: 'ZCODE GLOBAL BUILD',
+    entitlements: [{ model: 'GLM-5.3-Flash', units: 300000000, unitType: 'token', period: 'one_time' }],
+  }
+  const snap = {
+    ...SNAP,
+    providers: SNAP.providers.map((p) => p.route === 'zai-coding-cn' ? { ...p, claimOffers: [offer] } : p),
+  }
+  const claimReply = { status: 'failure', terminal: false, message: '当前账号暂不满足领取条件' }
+  const { container, click, unmount } = await renderPlugin(t, { snap, claimReply })
+  const banner = container.querySelector('.dmu-footwrap .dmu-claim')
+  await click(banner.querySelector('.dmu-claim-pill'))
+  const failure = document.querySelector('.dmu-claim-failure')
+  assert.ok(failure, '领取失败应打开独立失败弹窗')
+  assert.ok(text(failure).includes('当前账号暂不满足领取条件'), '失败弹窗应展示服务端 message')
+  assert.ok(container.querySelector('.dmu-footwrap .dmu-claim'), '非终止型失败后横幅仍应保留')
+  assert.ok(!banner.querySelector('.dmu-claim-status'), '失败不能只写在横幅内部')
+  const acknowledge = [...failure.querySelectorAll('button')].find((button) => text(button) === '知道了')
+  await click(acknowledge)
+  assert.ok(!document.querySelector('.dmu-claim-failure'), '知道了只关闭失败弹窗')
+  assert.ok(container.querySelector('.dmu-footwrap .dmu-claim'), '关闭失败弹窗不触发重试或移除横幅')
+  await unmount()
+})
+
+test('GLM 领取横幅：X 仅关闭当前实例，面板重开与侧栏动态切换后恢复', async (t) => {
+  const offer = {
+    campaignId: 'campaign-remount', planId: 'plan-remount', name: 'ZCODE GLOBAL BUILD',
+    entitlements: [{ model: 'GLM-5.3-Flash', units: 300000000, unitType: 'token', period: 'one_time' }],
+  }
+  const snap = {
+    ...SNAP,
+    providers: SNAP.providers.map((p) => p.route === 'zai-coding-cn' ? { ...p, claimOffers: [offer] } : p),
+  }
+  let defaultProvider = 'zai-coding-cn'
+  const listeners = new Set()
+  const catalog = {
+    catalog: {
+      store: {
+        getSnapshot: () => ({ value: { default: { provider: defaultProvider } }, status: 'ready' }),
+        subscribe: (listener) => { listeners.add(listener); return () => listeners.delete(listener) },
+      },
+    },
+  }
+  const { container, click, calls, unmount } = await renderPlugin(t, {
+    snap, services: { modelDirectories: catalog },
+  })
+  const sidebarBanner = () => container.querySelector('.dmu-footwrap .dmu-claim')
+  assert.ok(sidebarBanner(), '初始侧栏应显示横幅')
+  await click(sidebarBanner().querySelector('.dmu-claim-x'))
+  assert.ok(!sidebarBanner(), 'X 应关闭当前侧栏实例')
+  assert.equal(calls.filter((c) => c.endpoint === 'claimOfferDismiss').length, 0, 'X 不应向 Host/服务端发送 cancel')
+
+  await click(container.querySelector('.dmu-footwrap > .dmu-pcard'))
+  const panelBanner = document.querySelector('.dmu-list .dmu-claim')
+  assert.ok(panelBanner, '用量面板重新挂载 GLM 卡片时应重新显示横幅')
+  await click(panelBanner.querySelector('.dmu-claim-x'))
+  assert.ok(!document.querySelector('.dmu-list .dmu-claim'), 'X 应关闭当前面板实例')
+  assert.equal(calls.filter((c) => c.endpoint === 'claimOfferDismiss').length, 0, '再次关闭也不应产生任何网络上报')
+  const modalClose = [...document.querySelectorAll('.dmu-modal-head .dmu-headbtn')].at(-1)
+  await click(modalClose)
+  assert.ok(!sidebarBanner(), '侧栏原挂载实例仍保持本次关闭状态')
+
+  defaultProvider = 'kimi1'
+  listeners.forEach((listener) => listener())
+  await click(document.body)
+  assert.ok(text(container.querySelector('.dmu-footwrap > .dmu-pcard')).includes('Kimi 一号'), '侧栏应切换到 Kimi')
+  defaultProvider = 'zai-coding-cn'
+  listeners.forEach((listener) => listener())
+  await click(document.body)
+  assert.ok(text(container.querySelector('.dmu-footwrap > .dmu-pcard')).includes('GLM Coding'), '侧栏应切回 GLM')
+  assert.ok(sidebarBanner(), '侧栏动态切回 GLM 时应重新显示横幅')
+  await unmount()
+})
+
 test('可重置额度弹窗（ZCode 同款）：额度卡片 + 重置行 + 核销流程', async (t) => {
   const { container, click, calls, unmount } = await renderPlugin(t, )
   await click(container.querySelector('.dmu-win-foot .dmu-resetbtn'))
@@ -584,8 +877,8 @@ test('可重置额度弹窗（ZCode 同款）：额度卡片 + 重置行 + 核�
   assert.ok(text(dialog).includes('可重置额度'), '标题应为可重置额度')
   const cards = [...dialog.querySelectorAll('.dmu-quota-card')]
   assert.equal(cards.length, 2, '应有 5h 与周两张额度卡片')
-  assert.ok(text(cards[0]).includes('100%'), '5h 未开始应显示剩余 100%')
-  assert.ok(text(cards[1]).includes('8%'), '周 92% 已用应显示剩余 8%')
+  assert.ok(text(cards[0]).includes('100%'), '5h 未开始应显示剩余 100%（100.0% 省略小数）')
+  assert.ok(text(cards[1]).includes('8.0%'), '周 92% 已用应显示剩余 8.0%（保留 1 位小数）')
   // 下半：两类重置行（次数药丸 + 重置按钮）
   const rows = [...dialog.querySelectorAll('.dmu-quota-row')]
   assert.equal(rows.length, 2, '应有 5 小时与周两条重置行')

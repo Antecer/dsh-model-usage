@@ -801,6 +801,25 @@
   }
 }
 
+/* ---------- 额度窗口与赠送额度共享排版 ---------- */
+.dmu-win-head,
+.dmu-gift-head {
+  display: flex;
+  align-items: baseline;
+  font-size: 12.5px;
+  color: var(--dsw-alias-label-secondary, #637182);
+}
+
+.dmu-win-head b,
+.dmu-gift-pct,
+.dmu-gift-tokens {
+  margin-left: auto;
+  flex: none;
+  color: var(--dsw-alias-label-primary, #191f28);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 /* ---------- 额度窗口 ---------- */
 .dmu-wins {
   display: flex;
@@ -813,14 +832,9 @@
     flex-direction: column;
 
     & .dmu-win-head {
-      display: flex;
-      align-items: baseline;
-      font-size: 12.5px;
-      color: var(--dsw-alias-label-secondary, #637182);
       margin-bottom: 3px;
 
       & .dmu-win-label { font-weight: 600; color: var(--dsw-alias-label-primary, #191f28); margin-right: 8px; }
-      & b { margin-left: auto; color: var(--dsw-alias-label-primary, #191f28); font-variant-numeric: tabular-nums; }
     }
 
     & .dmu-win-track {
@@ -960,8 +974,62 @@
   & span.b { background: var(--dsw-alias-state-warn-primary, #b36aee); }
 }
 
+/* ---------- 赠送额度进度条（GLM 卡片） ---------- */
+.dmu-gift {
+  display: flex;
+  flex-direction: column;
+  margin-top: 6px;
+
+  & .dmu-gift-head {
+    & .dmu-gift-title {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      margin-right: 8px;
+      font-weight: 600;
+      color: var(--dsw-alias-label-primary, #191f28);
+    }
+  }
+
+  & .dmu-gift-track {
+    height: 6px;
+    margin-top: 3px;
+    border-radius: 99px;
+    /* 占位条与窗口进度条同款：浅灰底，耗尽仍可见 */
+    background: color-mix(in srgb, var(--dsw-alias-label-tertiary, #98a2b3) 25%, #fff);
+    overflow: hidden;
+
+    & .dmu-gift-fill {
+      display: block;
+      height: 100%;
+      border-radius: 99px;
+      background: var(--dsw-alias-state-business-primary, #4176e6);
+      transition: width 0.4s ease;
+    }
+  }
+
+  & .dmu-gift-foot {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-top: 3px;
+    /* 与窗口进度条脚注同字号 */
+    font-size: 12px;
+    color: var(--dsw-alias-label-tertiary, #98a2b3);
+
+    & .dmu-gift-expiry {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .dmu-wins .dmu-win .dmu-win-track .dmu-win-fill { transition: none; }
+  .dmu-wins .dmu-win .dmu-win-track .dmu-win-fill,
+  .dmu-gift .dmu-gift-track .dmu-gift-fill { transition: none; }
 }
 
 /* ---------- GLM 卡片左上角 Logo 即账户入口（未连接灰度） ---------- */
@@ -1225,4 +1293,257 @@
 
   &:hover { background: color-mix(in srgb, var(--dsw-alias-state-success-primary, #12b76a) 16%, transparent); }
   &:disabled { opacity: 0.55; }
+}
+
+/* ---------- GLM 卡片「ZCode 同款领取横幅」：底部浮层，允许覆盖用量信息 ---------- */
+/* 参数来自已校验 SHA-256 的 weekend-banner-3.1.2：96px 外框、84px 内容、18px 额度、12px 辅助文字。 */
+.dmu-pcard .dmu-claim {
+  --dmu-claim-fg: #171717;
+  --dmu-claim-sub: #737373;
+  --dmu-claim-bg: #fafafa;
+  --dmu-claim-border: #e0e2e5;
+  --dmu-claim-glow: #0b7fff;
+  position: absolute;
+  z-index: 4;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  box-sizing: border-box;
+  height: 96px;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--dmu-claim-border);
+  border-radius: 12px;
+  background:
+    radial-gradient(100px 90px at calc(100% - 10px) 0, color-mix(in srgb, var(--dmu-claim-glow) 19%, transparent) 0%, transparent 100%),
+    var(--dmu-claim-bg);
+  color: var(--dmu-claim-fg);
+  cursor: pointer;
+}
+
+.dark .dmu-pcard .dmu-claim,
+[data-theme='dark'] .dmu-pcard .dmu-claim {
+  --dmu-claim-fg: #fafafa;
+  --dmu-claim-sub: #a3a3a3;
+  --dmu-claim-bg: #0a0a0a;
+  --dmu-claim-border: #333333;
+  --dmu-claim-glow: #4099ff;
+}
+
+.dmu-claim-head {
+  position: absolute;
+  top: 9px;
+  left: 14px;
+  right: 44px;
+  display: flex;
+  align-items: center;
+  height: 18px;
+  white-space: nowrap;
+}
+
+.dmu-claim-z {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  box-sizing: border-box;
+  width: 18px;
+  height: 18px;
+  border: 0.5px solid #333;
+  border-radius: 5px;
+  background: #101112;
+  color: #fff;
+}
+
+.dmu-claim-z-icon {
+  display: block;
+  width: 10px;
+  height: 8.5px;
+}
+
+.dmu-claim-wordmark {
+  flex: none;
+  width: 45.2px;
+  height: 10px;
+  margin-left: 4px;
+  color: var(--dmu-claim-fg);
+}
+
+.dmu-claim-campaign {
+  min-width: 0;
+  margin-left: 7px;
+  overflow: hidden;
+  color: var(--dmu-claim-sub);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 16px;
+  text-overflow: ellipsis;
+}
+
+.dmu-claim-main {
+  position: absolute;
+  top: 34px;
+  left: 14px;
+  right: 14px;
+  height: 26px;
+  overflow: hidden;
+}
+
+.dmu-claim-amount {
+  color: var(--dmu-claim-fg);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 26px;
+  white-space: nowrap;
+}
+
+.dmu-claim-amount small {
+  margin-left: 4px;
+  color: var(--dmu-claim-sub);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.dmu-claim-foot {
+  position: absolute;
+  right: 10px;
+  bottom: 11.5px;
+  left: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  height: 19px;
+}
+
+.dmu-claim-model {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dmu-claim-sub);
+  font-size: 12px;
+  line-height: 19px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.dmu-claim-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  box-sizing: border-box;
+  min-width: 42px;
+  height: 19px;
+  padding: 0 9px;
+  border: 1px solid var(--dmu-claim-fg);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--dmu-claim-fg);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 17px;
+  pointer-events: none; /* 不是独立按钮，事件统一交给整块横幅 */
+  user-select: none;
+}
+
+.dmu-claim-spinner {
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid color-mix(in srgb, var(--dmu-claim-fg) 25%, transparent);
+  border-top-color: var(--dmu-claim-fg);
+  border-radius: 50%;
+  animation: dmu-claim-spin 0.7s linear infinite;
+}
+
+@keyframes dmu-claim-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dmu-claim-spinner { animation: none; }
+}
+
+.dmu-claim[aria-busy='true'] { cursor: default; }
+
+.dmu-claim-pending {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  color: var(--dmu-claim-fg);
+}
+
+.dmu-claim-x {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--dmu-claim-sub);
+  cursor: pointer;
+}
+
+.dmu-claim-x svg { width: 10px; height: 10px; }
+.dmu-claim-x:hover:not(:disabled) { background: color-mix(in srgb, var(--dmu-claim-fg) 8%, transparent); }
+
+/* ---------- ZCode 领取结果 / 失败弹窗 ---------- */
+.dmu-dialog-claim-result { width: 480px; }
+.dmu-claim-failure { width: 360px; }
+
+.dmu-claim-result-desc,
+.dmu-claim-failure-message {
+  color: var(--dsw-alias-label-primary, #191f28);
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.dmu-claim-result-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.dmu-claim-failure-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.dmu-claim-failure-message {
+  flex: 1;
+  min-width: 0;
+  max-height: 256px;
+  overflow-y: auto;
+}
+
+.dmu-claim-info-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  border: 1px solid var(--dsw-alias-label-secondary, #5c6670);
+  border-radius: 50%;
+  color: var(--dsw-alias-label-secondary, #5c6670);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
 }

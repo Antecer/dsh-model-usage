@@ -6,21 +6,29 @@ import { apply } from '../lib/index.mjs'
 import { adapterFor } from '../lib/adapters.mjs'
 import { invalidateProfileCache } from '../lib/profile.mjs'
 
-function harness(config, providers, keys) {
+function harness(config, providers, keys, optionalServices) {
   let handler
   const events = new Map()
   const resolved = []
   const ctx = {
     effect(fn, label) { if (label !== 'model-usage: ledger') fn() },
     on(name, fn) { events.set(name, fn); return () => {} },
-    get() { return null },
-    inject(deps, fn) { fn(this) },
+    get(name) { return optionalServices?.[name] ?? null },
+    inject(deps, fn) {
+      if (optionalServices && deps.some((name) => !['llm', 'credentials', 'connection', 'webServer'].includes(name))) return
+      fn(this)
+    },
     llm: { listProviders: () => providers.map((id) => ({ id })) },
     credentials: { async resolve(ref) { resolved.push(ref); return keys[ref] ? { value: keys[ref] } : null } },
     connection: { admit: () => ({}) },
     webServer: { register(route) { handler = route.handler; return () => {} } },
   }
-  apply(ctx, config)
+  if (optionalServices) {
+    for (const name of ['profileContext', 'agents', 'sessionController']) {
+      Object.defineProperty(ctx, name, { get() { throw new Error('cannot get property without inject: ' + name) } })
+    }
+  }
+  apply(ctx, { sessionResolver: async () => null, ...config })
   return {
     resolved,
     events,
@@ -322,6 +330,20 @@ test('快照并行取数：本轮新数据统一以响应完成时刻为 fetched
     assert.equal(p.fetchedAt, snap.generatedAt, '本轮新数据的 fetchedAt 应统一为快照完成时刻')
   }
   // TTL 内的第二次快照：缓存数据保留原 fetchedAt（不得被刷新成最新）
+  // 第二次快照与第一次完成落在同一毫秒，之后时钟再前进一步，仍不能改写缓存时间。
+  let ticks = 0
+  t.mock.method(Date, 'now', () => snap.generatedAt + (ticks++ > 0 ? 1 : 0))
   const snap2 = await host.snapshot()
   assert.equal(snap2.providers[0].fetchedAt, snap.providers[0].fetchedAt)
+})
+
+test('可选服务未注入时不影响额度初始化，profile 仍可从 pluginManager 读取', async (t) => {
+  const requests = fixture(t)
+  const host = harness({}, ['kimi1'], { MODEL_USAGE_TEST_KIMI1: 'test-account-one' }, {
+    pluginManager: { profile: { dir: fileURLToPath(new URL('./fixtures/profile', import.meta.url)) } },
+  })
+  const snapshot = await host.snapshot()
+  assert.deepEqual(snapshot.providers.map((p) => p.route), ['kimi1'])
+  assert.equal(snapshot.providers[0].adapter, 'kimi-coding')
+  assert.equal(requests.length, 1)
 })
